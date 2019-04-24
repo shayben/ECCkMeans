@@ -1,16 +1,18 @@
 import networkx as nx
 import itertools
 import numpy as np
-from sklearn import metrics
+from sklearn import metrics, manifold
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from math import sqrt, log
-import math, random
+from sklearn.datasets.samples_generator import make_blobs
+import random
 from copy import deepcopy
 import time
 from datetime import datetime
 from matplotlib import pyplot as plt
 from scipy import stats
+from scipy.spatial import distance
+from scipy.optimize import linear_sum_assignment
 
 def GenerateGraph(proba, bigleavessizes):
     n = sum(bigleavessizes)
@@ -40,21 +42,18 @@ def GenerateGraph(proba, bigleavessizes):
     return G, labels
 
 
-def binarylimitsspecial(n, k, T, verbose=True):
-    '''
+def binarylimitsspecial(n, k, T, p, q, verbose=True):
+    """
     Compare the ECC basic approach to PCA on the stochastic block model with k equal-size clusters
     :param n: number of nodes
     :param k: number of clusters --> each cluster has size n/k
     :param T: length of the simple code
     :param verbose: set to false to avoid printing detailed results
-    :return: 
-    '''
-
+    :return:
+    """
     if verbose: print("PARAMS", n, k)
-    global p, q
     Matrix = np.tile(q, [k, k])
     np.fill_diagonal(Matrix, p)
-
     bigleavessizes = [int(n / k)] * k
 
     if verbose:
@@ -64,18 +63,56 @@ def binarylimitsspecial(n, k, T, verbose=True):
     labels = np.hstack([[i] * (int(n / k)) for i in range(k)])
     A = np.matrix(0)
     while (A.shape[0] != n):
-        G, labels = GenerateGraph(Matrix, bigleavessizes)
+        G, tmplabels = GenerateGraph(Matrix, bigleavessizes)
         if verbose: print("Generation done.")
         A = nx.adjacency_matrix(G)
     X = A.todense()
+    #embedding = manifold.MDS(n_components=n)
+    #X = embedding.fit_transform(X)
+    return compute_all_kmeans(X, T, k, labels, verbose)
 
+
+def apply_on_blobs(n, k, T, p, verbose=True):
+    """
+    :param n: number of points
+    :param k: for k-means
+    :param T: ECC code length
+    :param p: blob STD
+    :param verbose:
+    :return:
+    """
+    X, labels = make_blobs(n_samples=n, centers=k, cluster_std=p)
+    if verbose:
+        plt.scatter(X[:, 0], X[:, 1], c=labels)
+    return compute_all_kmeans(X, T, k, labels, verbose)
+
+
+def correct_label_assignment(cluster_labels, true_labels):
+    conf_mat = metrics.confusion_matrix(true_labels, cluster_labels)
+    # hungarian algorithm to assign optimal cluster ids to original labels
+    _, idmap = linear_sum_assignment(1 / (1 + conf_mat))
+    nbrs = dict([(id, v) for v, id in enumerate(idmap)])
+    return np.asarray([nbrs[v] for v in cluster_labels]), conf_mat
+
+
+def compute_all_kmeans(X, T, k, labels, verbose=True):
+    """
+    :param X: array shape=(n_samples, n_features)
+    :param T: ECC code length
+    :param k: for k-means
+    :param labels: ground truth cluster ids
+    :param verbose: print details
+    :return: acc_alg, acc_pca, acc_vanilla
+    """
+    n = X.shape[0]
     ### Error Correcting Code approach
     tic = time.time()
     np.random.seed(int(time.time()))
     random_subsets = np.random.randint(0, 2, (n, T))
-    parity_bits = np.mod(A * random_subsets, 2)
+    parity_bits = np.mod(np.matmul(X, random_subsets), 2)
     reduced_data = np.hstack([X, parity_bits])
-    kmeans_clusters_alg = kmeans(reduced_data, k)
+    kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
+
     acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
     print("ALG took %.3s seconds. Accuracy=%s" % (time.time() - tic, acc_alg))
     if verbose:
@@ -85,7 +122,7 @@ def binarylimitsspecial(n, k, T, verbose=True):
     ### Classic PCA approach
     tic = time.time()
     reduced_data2 = PCA().fit_transform(X)
-    kmeans_clusters_standard = kmeans(reduced_data2, k)
+    kmeans_clusters_standard, conf_mat2 = correct_label_assignment(kmeans(reduced_data2, k), labels)
     acc_pca = metrics.classification.accuracy_score(labels, kmeans_clusters_standard)
     print("PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time.time() - tic, acc_pca))
     if verbose:
@@ -95,7 +132,7 @@ def binarylimitsspecial(n, k, T, verbose=True):
     ### Vanilla k-means approach
     tic = time.time()
     reduced_data3 = X
-    kmeans_clusters_vanilla = kmeans(reduced_data3, k)
+    kmeans_clusters_vanilla, conf_mat3 = correct_label_assignment(kmeans(reduced_data3, k), labels)
     acc_vanilla = metrics.classification.accuracy_score(labels, kmeans_clusters_vanilla)
     print("Vanilla k-means took %.3s seconds. Accuracy=%s" % (time.time() - tic, acc_vanilla))
     if verbose:
@@ -245,24 +282,25 @@ def digits(T=64, plotresult=False):
 
 def wrapper(n):
     runs = 50
-    global p, q
-    p = 1 / 10  # log(n)/sqrt(n)
-    q = 1 / 200  # log(n)/(10*sqrt(n))
+    #p = 1 / 10  # log(n)/sqrt(n)
+    #q = 1 / 200  # log(n)/(10*sqrt(n))
+    #p, q = 0.1, 0.005
+    p, q = 1, 0
     res = list()
     for step in range(runs):
         print('iter #%s' % step)
-        res.append(binarylimitsspecial(n, 4, 10 * int(n), runs < 5))
+        res.append(binarylimitsspecial(n, 4, 10 * int(n), p, q, runs < 5))
     res = np.asarray(res)
     plt.boxplot(res, notch=True, labels=['ALG', 'PCA', 'VANILLA'])
     plt.ylabel('Clustering accuracy')
     anovap = stats.f_oneway(res[:, 0], res[:, 1], res[:, 2])
     plt.title('Comparing %s runs at n=%s p=%s q=%s p-value(anova)=%.2E' % (runs, n, p, q, anovap.pvalue))
+    plt.savefig('results_%s_%s_%s.png' % (n, p, q))
     plt.show()
 
+if __name__ == "__main__":
+    ### SBM
+    wrapper(800)
 
-
-### SBM
-wrapper(800)
-
-### Digits
-# digits()
+    ### Digits
+    # digits()
