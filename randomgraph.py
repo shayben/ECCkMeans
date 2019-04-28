@@ -117,9 +117,9 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
     parity_bits = np.mod(np.matmul(X, random_subsets), 2)
     reduced_data = np.hstack([X, parity_bits])
     kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
-
     acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
-    print("ALG took %.3s seconds. Accuracy=%s" % (time.time() - tic, acc_alg))
+    time_alg = time.time() - tic
+    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
     if verbose:
         print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
         print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
@@ -129,7 +129,8 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
     reduced_data2 = PCA().fit_transform(X)
     kmeans_clusters_standard, conf_mat2 = correct_label_assignment(kmeans(reduced_data2, k), labels)
     acc_pca = metrics.classification.accuracy_score(labels, kmeans_clusters_standard)
-    print("PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time.time() - tic, acc_pca))
+    time_pca = time.time() - tic
+    print("PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time_pca, acc_pca))
     if verbose:
         print(metrics.classification.classification_report(labels, kmeans_clusters_standard))
         print(metrics.confusion_matrix(labels, kmeans_clusters_standard))
@@ -139,12 +140,13 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
     reduced_data3 = X
     kmeans_clusters_vanilla, conf_mat3 = correct_label_assignment(kmeans(reduced_data3, k), labels)
     acc_vanilla = metrics.classification.accuracy_score(labels, kmeans_clusters_vanilla)
-    print("Vanilla k-means took %.3s seconds. Accuracy=%s" % (time.time() - tic, acc_vanilla))
+    time_vanilla = time.time() - tic
+    print("Vanilla k-means took %.3s seconds. Accuracy=%s" % (time_vanilla, acc_vanilla))
     if verbose:
         print(metrics.classification.classification_report(labels, kmeans_clusters_vanilla))
         print(metrics.confusion_matrix(labels, kmeans_clusters_vanilla))
 
-    return acc_alg, acc_pca, acc_vanilla
+    return acc_alg, acc_pca, acc_vanilla, time_alg, time_pca, time_vanilla
 
 
 def classif_error(labels):
@@ -293,15 +295,23 @@ def wrapper(n):
     T = int(0.1 * n)# int(n*(n-1)/2)
     #p, q = 0.01, 0.003
     res = list()
+    timeres = list()
     for step in range(runs):
         print('iter #%s' % step)
-        res.append(binarylimitsspecial(n, 4, T, p, q, runs < 5))
+        iterout = binarylimitsspecial(n, 4, T, p, q, runs < 5)
+        res.append(iterout[:3])
+        timeres.append(iterout[3:])
     res = np.asarray(res)
-    plt.boxplot(res, notch=True, labels=['ALG', 'PCA', 'VANILLA'])
+    timeres = np.asarray(timeres)
+    plt.subplot(2, 1, 1)
+    plt.boxplot(res, notch=True, labels=['', '', ''])
     plt.ylabel('Clustering accuracy')
     anovap = stats.f_oneway(res[:, 0], res[:, 1], res[:, 2])
-    plt.title('Comparing %s runs at n=%s p=%s q=%s T=%s p-value(anova)=%.2E' % (runs, n, p, q, T, anovap.pvalue))
-    plt.savefig('results_%s_%s_%s.png' % (n, p, q))
+    plt.title('Comparing %s runs at n=%s \n p=%s q=%s T=%s p-value(anova)=%.2E' % (runs, n, p, q, T, anovap.pvalue))
+    plt.subplot(2, 1, 2)
+    plt.boxplot(timeres, notch=True, labels=['ALG', 'PCA', 'VANILLA'])
+    plt.ylabel('Runtime(sec)')
+    plt.savefig('results_%s_%s_%s_%s.png' % (n, p, q, T))
     plt.show()
 
 ### SBM
