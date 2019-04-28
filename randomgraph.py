@@ -15,33 +15,6 @@ from scipy import stats
 from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
 
-def GenerateGraph(proba, bigleavessizes):
-    n = sum(bigleavessizes)
-    G = nx.Graph()
-    labels = []
-    i = 0
-    for lab in range(len(bigleavessizes)):
-        for u in range(bigleavessizes[lab]):
-            labels.append(lab)
-            # print(lab)
-            i += 1
-    count = 0
-
-    permuted = np.random.permutation(n)
-    cpylabels = labels[:]
-    labels = [cpylabels[permuted[x] - 1] for x in range(n)]
-
-    for u, v in list(itertools.combinations_with_replacement(range(n), r=2)):
-        clustu = labels[u]
-        clustv = labels[v]
-        coin = np.random.random()
-        if coin < proba[clustu][clustv]:
-            count = count + 1
-            G.add_edge(u, v, weight=1.0)
-
-    #print("Number of edges:", count)
-    return G, labels
-
 
 def binarylimitsspecial(n, k, T, p, q, verbose=True):
     """
@@ -148,25 +121,6 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
 
     return acc_alg, acc_pca, acc_vanilla, time_alg, time_pca, time_vanilla
 
-
-def classif_error(labels):
-    nb_correct_class = 0
-    # for
-    n = len(labels)
-    for i in range(len(labels)):
-        if i < n / 4 and labels[i] == 0:
-            nb_correct_class += 1
-        if i >= n / 2 and labels[i] == 1:
-            nb_correct_class += 1
-    return (nb_correct_class / n)
-
-
-def check_labels(clustering, labels):
-    nb_correct_class = 0
-    for c in range(len(clustering)):
-        if clustering[c] - 1 == labels[c]:
-            nb_correct_class += 1
-    return nb_correct_class
 
 
 def kmeans(X, k):
