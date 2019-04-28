@@ -10,6 +10,7 @@ from copy import deepcopy
 import time
 from datetime import datetime
 from matplotlib import pyplot as plt
+import scipy as sp
 from scipy import stats
 from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
@@ -56,17 +57,21 @@ def binarylimitsspecial(n, k, T, p, q, verbose=True):
     np.fill_diagonal(Matrix, p)
     bigleavessizes = [int(n / k)] * k
 
+    intra = sp.linalg.block_diag(*[distance.squareform(np.random.binomial(1, p, int(d * (d-1) / 2))) for _, d in enumerate(bigleavessizes)])
+    intra_mask = sp.linalg.block_diag(*[np.ones((d, d)) for _, d in enumerate(bigleavessizes)])
+    intra_fin = np.multiply(intra, intra_mask)
+    inter = distance.squareform(np.random.binomial(1, q, int(n*(n-1)/2)))
+    inter_mask = np.ones((n, n)) - intra_mask
+    inter_fin = np.multiply(inter, inter_mask)
+    X = intra_fin + inter_fin
+
     if verbose:
         print("Probability Matrix:")
         print(np.matrix(Matrix))
 
     labels = np.hstack([[i] * (int(n / k)) for i in range(k)])
-    A = np.matrix(0)
-    while (A.shape[0] != n):
-        G, tmplabels = GenerateGraph(Matrix, bigleavessizes)
-        if verbose: print("Generation done.")
-        A = nx.adjacency_matrix(G)
-    X = A.todense()
+
+    if verbose: print("Generation done.")
     #embedding = manifold.MDS(n_components=n)
     #X = embedding.fit_transform(X)
     return compute_all_kmeans(X, T, k, labels, verbose)
@@ -284,23 +289,23 @@ def wrapper(n):
     runs = 50
     #p = 1 / 10  # log(n)/sqrt(n)
     #q = 1 / 200  # log(n)/(10*sqrt(n))
-    #p, q = 0.1, 0.005
-    p, q = 1, 0
+    p, q = 0.01, 0.003
+    T = int(0.1 * n)# int(n*(n-1)/2)
+    #p, q = 0.01, 0.003
     res = list()
     for step in range(runs):
         print('iter #%s' % step)
-        res.append(binarylimitsspecial(n, 4, 10 * int(n), p, q, runs < 5))
+        res.append(binarylimitsspecial(n, 4, T, p, q, runs < 5))
     res = np.asarray(res)
     plt.boxplot(res, notch=True, labels=['ALG', 'PCA', 'VANILLA'])
     plt.ylabel('Clustering accuracy')
     anovap = stats.f_oneway(res[:, 0], res[:, 1], res[:, 2])
-    plt.title('Comparing %s runs at n=%s p=%s q=%s p-value(anova)=%.2E' % (runs, n, p, q, anovap.pvalue))
+    plt.title('Comparing %s runs at n=%s p=%s q=%s T=%s p-value(anova)=%.2E' % (runs, n, p, q, T, anovap.pvalue))
     plt.savefig('results_%s_%s_%s.png' % (n, p, q))
     plt.show()
 
-if __name__ == "__main__":
-    ### SBM
-    wrapper(800)
+### SBM
+wrapper(600)
 
-    ### Digits
-    # digits()
+### Digits
+# digits()
