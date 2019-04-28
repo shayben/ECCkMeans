@@ -16,7 +16,7 @@ from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
 
 
-def binarylimitsspecial(n, k, T, p, q, verbose=True):
+def binarylimitsspecial(n, k, T, p, q, s=.5, verbose=True):
     """
     Compare the ECC basic approach to PCA on the stochastic block model with k equal-size clusters
     :param n: number of nodes
@@ -47,7 +47,7 @@ def binarylimitsspecial(n, k, T, p, q, verbose=True):
     if verbose: print("Generation done.")
     #embedding = manifold.MDS(n_components=n)
     #X = embedding.fit_transform(X)
-    return compute_all_kmeans(X, T, k, labels, verbose)
+    return compute_all_kmeans(X, T, k, s, labels, verbose)
 
 
 def apply_on_blobs(n, k, T, p, verbose=True):
@@ -73,7 +73,7 @@ def correct_label_assignment(cluster_labels, true_labels):
     return np.asarray([nbrs[v] for v in cluster_labels]), conf_mat
 
 
-def compute_all_kmeans(X, T, k, labels, verbose=True):
+def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     """
     :param X: array shape=(n_samples, n_features)
     :param T: ECC code length
@@ -86,9 +86,11 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
     ### Error Correcting Code approach
     tic = time.time()
     np.random.seed(int(time.time()))
-    random_subsets = np.random.randint(0, 2, (n, T))
+    random_subsets = np.random.binomial(1, s, (n, T))
+    #random_subsets = np.random.randint(0, 2, (n, T))
     parity_bits = np.mod(np.matmul(X, random_subsets), 2)
     reduced_data = np.hstack([X, parity_bits])
+    subtime = time.time()
     kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
     acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
     time_alg = time.time() - tic
@@ -107,6 +109,25 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
     if verbose:
         print(metrics.classification.classification_report(labels, kmeans_clusters_standard))
         print(metrics.confusion_matrix(labels, kmeans_clusters_standard))
+        plt.subplot(1, 2, 1)
+        tmp = distance.squareform(distance.pdist(X))
+        np.fill_diagonal(tmp, np.mean(tmp))
+        plt.imshow(tmp)
+        plt.subplot(1, 2, 2)
+        tmp = distance.squareform(distance.pdist(reduced_data))
+        np.fill_diagonal(tmp, np.mean(tmp))
+        plt.imshow(tmp)
+
+    ### ECC-PCA approach
+    tic = time.time()
+    reduced_data3 = PCA().fit_transform(reduced_data)
+    kmeans_clusters_eccpca, conf_mat3 = correct_label_assignment(kmeans(reduced_data3, k), labels)
+    acc_eccpca = metrics.classification.accuracy_score(labels, kmeans_clusters_eccpca)
+    time_eccpca = time.time() - tic + subtime
+    print("ECC-PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time_eccpca, acc_eccpca))
+    if verbose:
+        print(metrics.classification.classification_report(labels, kmeans_clusters_eccpca))
+        print(metrics.confusion_matrix(labels, kmeans_clusters_eccpca))
 
     ### Vanilla k-means approach
     tic = time.time()
@@ -119,7 +140,7 @@ def compute_all_kmeans(X, T, k, labels, verbose=True):
         print(metrics.classification.classification_report(labels, kmeans_clusters_vanilla))
         print(metrics.confusion_matrix(labels, kmeans_clusters_vanilla))
 
-    return acc_alg, acc_pca, acc_vanilla, time_alg, time_pca, time_vanilla
+    return acc_alg, acc_pca, acc_eccpca, acc_vanilla, time_alg, time_pca, time_eccpca, time_vanilla
 
 
 
@@ -242,28 +263,30 @@ def digits(T=64, plotresult=False):
 
 
 def wrapper(n):
-    runs = 50
+    runs = 20
     #p = 1 / 10  # log(n)/sqrt(n)
     #q = 1 / 200  # log(n)/(10*sqrt(n))
     p, q = 0.01, 0.003
-    T = int(0.1 * n)# int(n*(n-1)/2)
-    #p, q = 0.01, 0.003
+    # p, q = 0.01, 0.003
+    s = 0.5#sample size
+    T = 5# int(n*(n-1)/2)
+
     res = list()
     timeres = list()
     for step in range(runs):
         print('iter #%s' % step)
-        iterout = binarylimitsspecial(n, 4, T, p, q, runs < 5)
-        res.append(iterout[:3])
-        timeres.append(iterout[3:])
+        iterout = binarylimitsspecial(n, 4, T, p, q, s, runs < 5)
+        res.append(iterout[:4])
+        timeres.append(iterout[4:])
     res = np.asarray(res)
     timeres = np.asarray(timeres)
     plt.subplot(2, 1, 1)
-    plt.boxplot(res, notch=True, labels=['', '', ''])
+    plt.boxplot(res, notch=True, labels=['', '', '', ''])
     plt.ylabel('Clustering accuracy')
-    anovap = stats.f_oneway(res[:, 0], res[:, 1], res[:, 2])
-    plt.title('Comparing %s runs at n=%s \n p=%s q=%s T=%s p-value(anova)=%.2E' % (runs, n, p, q, T, anovap.pvalue))
+    anovap = stats.f_oneway(*res.transpose())
+    plt.title(('Comparing %s runs at n=%s'+'\n'+'p=%s q=%s T=%s s=%s'+'\n'+'p-value(anova)=%.2E') % (runs, n, p, q, T, s, anovap.pvalue))
     plt.subplot(2, 1, 2)
-    plt.boxplot(timeres, notch=True, labels=['ALG', 'PCA', 'VANILLA'])
+    plt.boxplot(timeres, notch=True, labels=['ALG', 'PCA', 'ECC-PCA', 'VANILLA'])
     plt.ylabel('Runtime(sec)')
     plt.savefig('results_%s_%s_%s_%s.png' % (n, p, q, T))
     plt.show()
