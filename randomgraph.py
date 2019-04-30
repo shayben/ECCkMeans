@@ -14,7 +14,19 @@ import scipy as sp
 from scipy import stats
 from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
+#from CTA.BCHCode import BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
 
+def generate_block_stochastic_data(n, k, p, q):
+    bigleavessizes = [int(n / k)] * k
+    intra = sp.linalg.block_diag(*[distance.squareform(np.random.binomial(1, p, int(d * (d-1) / 2))) for _, d in enumerate(bigleavessizes)])
+    intra_mask = sp.linalg.block_diag(*[np.ones((d, d)) for _, d in enumerate(bigleavessizes)])
+    intra_fin = np.multiply(intra, intra_mask)
+    inter = distance.squareform(np.random.binomial(1, q, int(n*(n-1)/2)))
+    inter_mask = np.ones((n, n)) - intra_mask
+    inter_fin = np.multiply(inter, inter_mask)
+    X = intra_fin + inter_fin
+    labels = np.hstack([[i] * (int(n / k)) for i in range(k)])
+    return X, labels
 
 def binarylimitsspecial(n, k, T, p, q, s=.5, verbose=True):
     """
@@ -26,23 +38,7 @@ def binarylimitsspecial(n, k, T, p, q, s=.5, verbose=True):
     :return:
     """
     if verbose: print("PARAMS", n, k)
-    Matrix = np.tile(q, [k, k])
-    np.fill_diagonal(Matrix, p)
-    bigleavessizes = [int(n / k)] * k
-
-    intra = sp.linalg.block_diag(*[distance.squareform(np.random.binomial(1, p, int(d * (d-1) / 2))) for _, d in enumerate(bigleavessizes)])
-    intra_mask = sp.linalg.block_diag(*[np.ones((d, d)) for _, d in enumerate(bigleavessizes)])
-    intra_fin = np.multiply(intra, intra_mask)
-    inter = distance.squareform(np.random.binomial(1, q, int(n*(n-1)/2)))
-    inter_mask = np.ones((n, n)) - intra_mask
-    inter_fin = np.multiply(inter, inter_mask)
-    X = intra_fin + inter_fin
-
-    if verbose:
-        print("Probability Matrix:")
-        print(np.matrix(Matrix))
-
-    labels = np.hstack([[i] * (int(n / k)) for i in range(k)])
+    X, labels = generate_block_stochastic_data(n, k, T, p, q)
 
     if verbose: print("Generation done.")
     #embedding = manifold.MDS(n_components=n)
@@ -72,6 +68,24 @@ def correct_label_assignment(cluster_labels, true_labels):
     nbrs = dict([(id, v) for v, id in enumerate(idmap)])
     return np.asarray([nbrs[v] for v in cluster_labels]), conf_mat
 
+def ecc_kmeans(X, T, k, s, labels, verbose=True):
+    ### Error Correcting Code approach
+    n = X.shape[0]
+    tic = time.time()
+    np.random.seed(int(time.time()))
+    random_subsets = np.random.binomial(1, s, (n, T))
+    parity_bits = np.mod(np.matmul(X, random_subsets), 2)
+    reduced_data = np.hstack([X, parity_bits])
+    subtime = time.time() - tic
+    kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
+    acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
+    time_alg = time.time() - tic
+    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
+    if verbose:
+        print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
+        print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
+    return reduced_data, acc_alg, time_alg, subtime
+
 
 def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     """
@@ -83,21 +97,10 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     :return: acc_alg, acc_pca, acc_vanilla
     """
     n = X.shape[0]
+    #BCHCode.decode()
+
     ### Error Correcting Code approach
-    tic = time.time()
-    np.random.seed(int(time.time()))
-    random_subsets = np.random.binomial(1, s, (n, T))
-    #random_subsets = np.random.randint(0, 2, (n, T))
-    parity_bits = np.mod(np.matmul(X, random_subsets), 2)
-    reduced_data = np.hstack([X, parity_bits])
-    subtime = time.time() - tic
-    kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
-    acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
-    time_alg = time.time() - tic
-    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
-    if verbose:
-        print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
-        print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans(X, T, k, s, labels, verbose)
 
     ### Classic PCA approach
     tic = time.time()
@@ -270,7 +273,6 @@ def wrapper(n):
     # p, q = 0.01, 0.003
     s = 0.5#sample size
     T = 5# int(n*(n-1)/2)
-
     res = list()
     timeres = list()
     for step in range(runs):
@@ -291,8 +293,34 @@ def wrapper(n):
     plt.savefig('results_%s_%s_%s_%s.png' % (n, p, q, T))
     plt.show()
 
+def condition_on_T(n):
+    runs = 20
+    p, q = 0.01, 0.003
+    s = 0.5
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]# int(n*(n-1)/2)
+    res = list()
+    for t in T:
+        subres = list()
+        for step in range(runs):
+            print('T=%s iter #%s' % (t, step))
+            X, labels = generate_block_stochastic_data(n, 4, p, q)
+            _, acc_alg, _, _ = ecc_kmeans(X, t, 4, s, labels, False)
+            subres.append(acc_alg)
+        res.append(np.asarray(subres))
+    res = np.asarray(res)
+    errs = np.std(res, axis=1)
+    means = np.mean(res, axis=1)
+    plt.errorbar(T, means, yerr=errs)
+    plt.ylabel('Clustering accuracy')
+    plt.xlabel('ECC code size')
+    plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
+    plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
+    plt.show()
+
+
 ### SBM
-wrapper(600)
+condition_on_T(800)
+#wrapper(600)
 
 ### Digits
 # digits()
