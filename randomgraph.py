@@ -14,7 +14,8 @@ import scipy as sp
 from scipy import stats
 from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
-#from CTA.BCHCode import BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
+import generate_BX_graph as BX
+#from CTA.BCHCode zimport BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
 
 def generate_block_stochastic_data(n, k, p, q):
     bigleavessizes = [int(n / k)] * k
@@ -85,6 +86,22 @@ def ecc_kmeans(X, T, k, s, labels, verbose=True):
         print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
         print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
     return reduced_data, acc_alg, time_alg, subtime
+
+
+def ecc_kmeans_books(X, T, k, s, verbose=True):
+    ### Error Correcting Code approach
+    n = X.shape[0]
+    tic = time.time()
+    np.random.seed(int(time.time()))
+    random_subsets = np.random.binomial(1, s, (n, T))
+    parity_bits = np.mod(np.matmul(X, random_subsets), 2)
+    reduced_data = np.hstack([X, parity_bits])
+    subtime = time.time() - tic
+    kmeans_clusters_alg = kmeans(reduced_data, k)
+    
+    time_alg = time.time() - tic
+    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
+    return kmeans_clusters_alg
 
 
 def compute_all_kmeans(X, T, k, s, labels, verbose=True):
@@ -316,6 +333,55 @@ def condition_on_T(n):
     plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
     plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
     plt.show()
+
+def save_clusters(t, clusters, books, inv_mapping,
+                  filename = "tmp_clusters"):
+    f = open(filename+str(t), "w")
+    sets = {}
+    for p in range(len(clusters)):
+        if clusters[p] not in sets:
+            sets[clusters[p]] = []
+        sets[clusters[p]].append(p)
+
+    for c in sets:
+        f.write("\n\nCluster "+str(c)+"\n")
+        for p in sets[c]:
+            f.write(inv_mapping[p]+" ")
+            for x in books[inv_mapping[p]]:
+                f.write(x+" ")
+            f.write("\n")
+        f.write("\n\n")
+    f.close()
+
+    
+#####
+## BX has no ground truth
+#####
+def condition_on_T_BX(n):
+    runs = 20
+    p, q = 0.01, 0.003
+    s = 0.5
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]# int(n*(n-1)/2)
+    X, mapping, inv_mapping, books = BX.Wrapper()
+    res = list()
+    for t in T:
+        subres = list()
+        for step in range(runs):
+            print('T=%s iter #%s' % (t, step))
+            # X, labels = generate_block_stochastic_data(n, 4, p, q)
+            clust_alg = ecc_kmeans_books(X, t, 4, s, False)
+            save_clusters(t, clust_alg, books, inv_mapping)
+        #     subres.append(acc_alg)
+        # res.append(np.asarray(subres))
+    # res = np.asarray(res)
+    # errs = np.std(res, axis=1)
+    # means = np.mean(res, axis=1)
+    # plt.errorbar(T, means, yerr=errs)
+    # plt.ylabel('Clustering accuracy')
+    # plt.xlabel('ECC code size')
+    # plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
+    # plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
+    # plt.show()
 
 
 ### SBM
