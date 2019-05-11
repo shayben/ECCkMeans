@@ -339,6 +339,7 @@ def save_clusters(t, clusters, books, inv_mapping,
     f = open(filename+str(t), "w")
     sets = {}
     for p in range(len(clusters)):
+        if inv_mapping[clusters[p]] not in books: continue
         if clusters[p] not in sets:
             sets[clusters[p]] = []
         sets[clusters[p]].append(p)
@@ -357,7 +358,7 @@ def save_clusters(t, clusters, books, inv_mapping,
 #####
 ## BX has no ground truth
 #####
-def condition_on_T_BX(n):
+def condition_on_T_BX():
     runs = 20
     p, q = 0.01, 0.003
     s = 0.5
