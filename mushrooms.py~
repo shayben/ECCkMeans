@@ -1,0 +1,17 @@
+import sys
+import np
+
+def ReadMushrooms():
+    labels = []
+    filename = "mushrooms.txt"
+    
+    f = open(filename, "r")
+    lines = f.readlines
+
+    count = 0
+    for l in lines:
+        w = l.split()
+        labels.append(int(w[0]))
+
+
+    return np.matrix(features)

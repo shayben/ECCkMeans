@@ -15,6 +15,7 @@ from scipy import stats
 from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
 import generate_BX_graph as BX
+import mushrooms as mush
 #from CTA.BCHCode zimport BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
 
 def generate_block_stochastic_data(n, k, p, q):
@@ -385,8 +386,33 @@ def condition_on_T_BX():
     # plt.show()
 
 
+def condition_on_T_mush():
+    runs = 20
+    p, q = 0.01, 0.003
+    s = 0.5
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100] #, 150, 200]# int(n*(n-1)/2)
+    X, labels = mush.ReadMushrooms()
+    res = list()
+    for t in T:
+        subres = list()
+        for step in range(runs):
+            print('T=%s iter #%s' % (t, step))
+            _, acc_alg, _, _ = ecc_kmeans(X, t, 2, s, labels, False)
+            subres.append(acc_alg)
+        res.append(np.asarray(subres))
+    res = np.asarray(res)
+    errs = np.std(res, axis=1)
+    means = np.mean(res, axis=1)
+    plt.errorbar(T, means, yerr=errs)
+    plt.ylabel('Clustering accuracy')
+    plt.xlabel('ECC code size')
+    plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
+    plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
+    plt.show()
+
+    
 ### SBM
-condition_on_T(800)
+condition_on_T_mush()
 #wrapper(600)
 
 ### Digits
