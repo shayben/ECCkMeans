@@ -412,7 +412,7 @@ def condition_on_T_mush():
 
     
 ### SBM
-condition_on_T_mush()
+condition_on_T(600)
 #wrapper(600)
 
 ### Digits
