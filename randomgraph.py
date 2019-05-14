@@ -164,6 +164,20 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     return acc_alg, acc_pca, acc_eccpca, acc_vanilla, time_alg, time_pca, time_eccpca, time_vanilla
 
 
+def subsampled_kmeans(X, k, percent):
+    """ runs kmeans on subsampled adj matrix,
+    :param X: currently expecting an n X n matrix (e.g. adj. matrix)
+    :param k:
+    :param percent:
+    :return:
+    """
+    n = X.shape[0]
+    smpl = int(n*percent)
+    smplindices = np.random.randint(0, n, smpl)
+    km = KMeans(init='k-means++', n_clusters=k, n_init=10)
+    km.fit(X[np.ix_(smplindices, smplindices)])
+    return km, smplindices
+
 
 def kmeans(X, k):
     alg = KMeans(init='k-means++', n_clusters=k, n_init=10)
@@ -386,7 +400,7 @@ def condition_on_T_BX():
     # plt.show()
 
 
-def condition_on_T_mush():
+def condition_on_T_mush(n):
     runs = 20
     p, q = 0.01, 0.003
     s = 0.5
@@ -410,9 +424,25 @@ def condition_on_T_mush():
     plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
     plt.show()
 
-    
+
+def kmeans_subsample_density_estimator(n=1000, k=4, p=0.08, q=0.003, sample_ratio=0.2):
+    print('n = %d k = %d sample_ratio = %.3f p = %.3f q=%.3f' % (n, k, sample_ratio, p, q))
+    X, labels = generate_block_stochastic_data(n, k, p, q)
+    km, idx = subsampled_kmeans(X, k, sample_ratio)
+    clustidx = [np.where(km.labels_ == i)[0] for i in range(k)]
+    sub_X = X[np.ix_(idx, idx)]
+    sub_n = len(idx)
+    intra_clust_sums = [np.sum(sub_X[np.ix_(tidx, tidx)]) for tidx in clustidx]
+    p_hat = np.mean([intra_clust_sums[i]/(len(tidx)**2) for i, tidx in enumerate(clustidx)])
+    q_hat = np.mean([(np.sum(sub_X[tidx, :]) - intra_clust_sums[i]) / (len(tidx)*(sub_n - len(tidx))) for i, tidx in enumerate(clustidx)])
+    kmeans_clusters_alg, conf_mat = correct_label_assignment(km.labels_, labels[idx])
+    acc_alg = metrics.classification.accuracy_score(labels[idx], kmeans_clusters_alg)
+    total_mse = 0.5 * np.sqrt((p-p_hat)**2 + (q-q_hat)**2)
+    print('subsampled Kmeans accuracy = %.3f p_hat = %.3f q_hat=%.3f totalMSE=%.3f' % (acc_alg, p_hat, q_hat, total_mse))
+
 ### SBM
-condition_on_T(600)
+kmeans_subsample_density_estimator()
+#condition_on_T(600)
 #wrapper(600)
 
 ### Digits
