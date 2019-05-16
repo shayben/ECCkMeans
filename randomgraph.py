@@ -4,6 +4,7 @@ import numpy as np
 from sklearn import metrics, manifold
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from sklearn.datasets.samples_generator import make_blobs
 import random
 from copy import deepcopy
@@ -16,19 +17,23 @@ from scipy.spatial import distance
 from scipy.optimize import linear_sum_assignment
 import generate_BX_graph as BX
 import mushrooms as mush
-#from CTA.BCHCode zimport BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
+
+
+# from CTA.BCHCode zimport BCHCode #borrowed from https://github.com/christiansiegel/coding-theory-algorithms
 
 def generate_block_stochastic_data(n, k, p, q):
     bigleavessizes = [int(n / k)] * k
-    intra = sp.linalg.block_diag(*[distance.squareform(np.random.binomial(1, p, int(d * (d-1) / 2))) for _, d in enumerate(bigleavessizes)])
+    intra = sp.linalg.block_diag(
+        *[distance.squareform(np.random.binomial(1, p, int(d * (d - 1) / 2))) for _, d in enumerate(bigleavessizes)])
     intra_mask = sp.linalg.block_diag(*[np.ones((d, d)) for _, d in enumerate(bigleavessizes)])
     intra_fin = np.multiply(intra, intra_mask)
-    inter = distance.squareform(np.random.binomial(1, q, int(n*(n-1)/2)))
+    inter = distance.squareform(np.random.binomial(1, q, int(n * (n - 1) / 2)))
     inter_mask = np.ones((n, n)) - intra_mask
     inter_fin = np.multiply(inter, inter_mask)
     X = intra_fin + inter_fin
     labels = np.hstack([[i] * (int(n / k)) for i in range(k)])
     return X, labels
+
 
 def binarylimitsspecial(n, k, T, p, q, s=.5, verbose=True):
     """
@@ -43,8 +48,8 @@ def binarylimitsspecial(n, k, T, p, q, s=.5, verbose=True):
     X, labels = generate_block_stochastic_data(n, k, T, p, q)
 
     if verbose: print("Generation done.")
-    #embedding = manifold.MDS(n_components=n)
-    #X = embedding.fit_transform(X)
+    # embedding = manifold.MDS(n_components=n)
+    # X = embedding.fit_transform(X)
     return compute_all_kmeans(X, T, k, s, labels, verbose)
 
 
@@ -70,6 +75,7 @@ def correct_label_assignment(cluster_labels, true_labels):
     nbrs = dict([(id, v) for v, id in enumerate(idmap)])
     return np.asarray([nbrs[v] for v in cluster_labels]), conf_mat
 
+
 def ecc_kmeans(X, T, k, s, labels, verbose=True):
     ### Error Correcting Code approach
     n = X.shape[0]
@@ -89,20 +95,27 @@ def ecc_kmeans(X, T, k, s, labels, verbose=True):
     return reduced_data, acc_alg, time_alg, subtime
 
 
-def ecc_kmeans_books(X, T, k, s, verbose=True):
+def sample_row(row, s, T):
+    """
+    sample_mat = sp.sparse.csr_matrix(np.random.binomial(1, s, (T, row.shape[1])))
+    np.mod(np.sum(np.asarray([row[0, i] for i in np.random.randint(0, row.shape[1], (T, 2))]).squeeze(), axis=1), 2)
+    return np.mod(np.sum(sample_mat.multiply(row), axis=1), 2).swapaxes(0, 1)
+    """
+    return np.mod(np.sum(np.asarray([row[0, i] for i in np.random.randint(0, row.shape[1], (T, int(s * row.shape[1])))]).squeeze(), axis=1), 2)
+
+
+def ecc_kmeans_v2(X, s, T):
     ### Error Correcting Code approach
-    n = X.shape[0]
     tic = time.time()
     np.random.seed(int(time.time()))
-    random_subsets = np.random.binomial(1, s, (n, T))
-    parity_bits = np.mod(np.matmul(X, random_subsets), 2)
+    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
     reduced_data = np.hstack([X, parity_bits])
     subtime = time.time() - tic
-    kmeans_clusters_alg = kmeans(reduced_data, k)
-    
+    kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
+    acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
     time_alg = time.time() - tic
     print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
-    return kmeans_clusters_alg
+    return reduced_data, acc_alg, time_alg, subtime
 
 
 def compute_all_kmeans(X, T, k, s, labels, verbose=True):
@@ -115,10 +128,10 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     :return: acc_alg, acc_pca, acc_vanilla
     """
     n = X.shape[0]
-    #BCHCode.decode()
+    # BCHCode.decode()
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans(X, T, k, s, labels, verbose)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2(X, s, T)
 
     ### Classic PCA approach
     tic = time.time()
@@ -164,18 +177,22 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     return acc_alg, acc_pca, acc_eccpca, acc_vanilla, time_alg, time_pca, time_eccpca, time_vanilla
 
 
-def subsampled_kmeans(X, k, percent):
-    """ runs kmeans on subsampled adj matrix,
-    :param X: currently expecting an n X n matrix (e.g. adj. matrix)
-    :param k:
-    :param percent:
-    :return:
+def subsampled_kmeans(X, k, fraction, is_adj=True):
+    """ runs kmeans on row-subsampled matrix,
+    :param X: n X m matrix
+    :param k: k for kmeans
+    :param fraction: fraction of n to sample
+    :param is_adj: is adjacency matrix (n X n)
+    :return: KMeans object and the indices of selected samples (rows)
     """
     n = X.shape[0]
-    smpl = int(n*percent)
+    smpl = int(n * fraction)
     smplindices = np.random.randint(0, n, smpl)
     km = KMeans(init='k-means++', n_clusters=k, n_init=10)
-    km.fit(X[np.ix_(smplindices, smplindices)])
+    if is_adj:
+        km.fit(X[np.ix_(smplindices, smplindices)])
+    else:
+        km.fit(X[smplindices, :])
     return km, smplindices
 
 
@@ -299,12 +316,12 @@ def digits(T=64, plotresult=False):
 
 def wrapper(n):
     runs = 20
-    #p = 1 / 10  # log(n)/sqrt(n)
-    #q = 1 / 200  # log(n)/(10*sqrt(n))
+    # p = 1 / 10  # log(n)/sqrt(n)
+    # q = 1 / 200  # log(n)/(10*sqrt(n))
     p, q = 0.01, 0.003
     # p, q = 0.01, 0.003
-    s = 0.5#sample size
-    T = 5# int(n*(n-1)/2)
+    s = 0.5  # sample size
+    T = 5  # int(n*(n-1)/2)
     res = list()
     timeres = list()
     for step in range(runs):
@@ -318,18 +335,20 @@ def wrapper(n):
     plt.boxplot(res, notch=True, labels=['', '', '', ''])
     plt.ylabel('Clustering accuracy')
     anovap = stats.f_oneway(*res.transpose())
-    plt.title(('Comparing %s runs at n=%s'+'\n'+'p=%s q=%s T=%s s=%s'+'\n'+'p-value(anova)=%.2E') % (runs, n, p, q, T, s, anovap.pvalue))
+    plt.title(('Comparing %s runs at n=%s' + '\n' + 'p=%s q=%s T=%s s=%s' + '\n' + 'p-value(anova)=%.2E') % (
+    runs, n, p, q, T, s, anovap.pvalue))
     plt.subplot(2, 1, 2)
     plt.boxplot(timeres, notch=True, labels=['ALG', 'PCA', 'ECC-PCA', 'VANILLA'])
     plt.ylabel('Runtime(sec)')
     plt.savefig('results_%s_%s_%s_%s.png' % (n, p, q, T))
     plt.show()
 
+
 def condition_on_T(n):
     runs = 20
     p, q = 0.01, 0.003
     s = 0.5
-    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]# int(n*(n-1)/2)
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]  # int(n*(n-1)/2)
     res = list()
     for t in T:
         subres = list()
@@ -345,13 +364,13 @@ def condition_on_T(n):
     plt.errorbar(T, means, yerr=errs)
     plt.ylabel('Clustering accuracy')
     plt.xlabel('ECC code size')
-    plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
+    plt.title(('ECC accuracy on %s runs at n=%s' + '\n' + 'p=%s q=%s s=%s') % (runs, n, p, q, s))
     plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
     plt.show()
 
-def save_clusters(t, clusters, books, inv_mapping,
-                  filename = "tmp_clusters"):
-    f = open(filename+str(t), "w")
+
+def save_clusters(t, clusters, books, inv_mapping, filename="tmp_clusters"):
+    f = open(filename + str(t), "w")
     sets = {}
     for p in range(len(clusters)):
         if inv_mapping[clusters[p]] not in books: continue
@@ -360,24 +379,24 @@ def save_clusters(t, clusters, books, inv_mapping,
         sets[clusters[p]].append(p)
 
     for c in sets:
-        f.write("\n\nCluster "+str(c)+"\n")
+        f.write("\n\nCluster " + str(c) + "\n")
         for p in sets[c]:
-            f.write(inv_mapping[p]+" ")
+            f.write(inv_mapping[p] + " ")
             for x in books[inv_mapping[p]]:
-                f.write(x+" ")
+                f.write(x + " ")
             f.write("\n")
         f.write("\n\n")
     f.close()
 
-    
 #####
 ## BX has no ground truth
 #####
+
 def condition_on_T_BX():
     runs = 20
     p, q = 0.01, 0.003
     s = 0.5
-    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]# int(n*(n-1)/2)
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100, 150, 200]  # int(n*(n-1)/2)
     X, mapping, inv_mapping, books = BX.Wrapper()
     res = list()
     for t in T:
@@ -404,7 +423,7 @@ def condition_on_T_mush(n):
     runs = 20
     p, q = 0.01, 0.003
     s = 0.5
-    T = [1, 5, 10, 20, 30, 40, 50, 80, 100] #, 150, 200]# int(n*(n-1)/2)
+    T = [1, 5, 10, 20, 30, 40, 50, 80, 100]  # , 150, 200]# int(n*(n-1)/2)
     X, labels = mush.ReadMushrooms()
     res = list()
     for t in T:
@@ -420,30 +439,119 @@ def condition_on_T_mush(n):
     plt.errorbar(T, means, yerr=errs)
     plt.ylabel('Clustering accuracy')
     plt.xlabel('ECC code size')
-    plt.title(('ECC accuracy on %s runs at n=%s'+'\n'+'p=%s q=%s s=%s') % (runs, n, p, q, s))
+    plt.title(('ECC accuracy on %s runs at n=%s' + '\n' + 'p=%s q=%s s=%s') % (runs, n, p, q, s))
     plt.savefig('results_conditioned_onT_%s_%s_%s.png' % (n, p, q))
     plt.show()
 
 
-def kmeans_subsample_density_estimator(n=1000, k=4, p=0.08, q=0.003, sample_ratio=0.2):
-    print('n = %d k = %d sample_ratio = %.3f p = %.3f q=%.3f' % (n, k, sample_ratio, p, q))
-    X, labels = generate_block_stochastic_data(n, k, p, q)
-    km, idx = subsampled_kmeans(X, k, sample_ratio)
-    clustidx = [np.where(km.labels_ == i)[0] for i in range(k)]
-    sub_X = X[np.ix_(idx, idx)]
-    sub_n = len(idx)
-    intra_clust_sums = [np.sum(sub_X[np.ix_(tidx, tidx)]) for tidx in clustidx]
-    p_hat = np.mean([intra_clust_sums[i]/(len(tidx)**2) for i, tidx in enumerate(clustidx)])
-    q_hat = np.mean([(np.sum(sub_X[tidx, :]) - intra_clust_sums[i]) / (len(tidx)*(sub_n - len(tidx))) for i, tidx in enumerate(clustidx)])
+def compute_alpha_beta(k, p, q):
+    """
+
+    :param k: kmeans
+    :param p: intra-cluster edge probability
+    :param q: inter-cluster edge probability
+    :return:
+    """
+    alpha = 1 / k * (2 * p ** 2 - 2 * p + 1) + (1 - 1 / k) * (2 * q ** 2 - 2 * q + 1)
+    beta = 2 * p * q - p - q + 1
+    return alpha, beta
+
+
+def compute_t_D(n, alpha, beta):
+    """
+    :param n: number of points
+    :param alpha: intra-cluster normalized Hamming similarity
+    :param beta: inter-cluster normalized Hamming similarity
+    :return: t_star - optimal subset sizes, D - number of added checksum coordinates
+    """
+    t_star = np.log(n * (beta - 1) * np.log(beta) / np.log(alpha)) / np.log(alpha / beta)
+    D = 1 / np.power(alpha, t_star)
+    return t_star, D
+
+
+def get_dataset(paramdict=None):
+    if paramdict['name'] == 'SBM':
+        n, k, p, q = paramdict['n'], paramdict['k'], paramdict['p'], paramdict['q']
+        X, labels = generate_block_stochastic_data(n, k, p, q)
+    elif paramdict['name'] == 'Mushrooms':
+        X, labels = mush.ReadMushrooms()
+        k = np.unique(labels).shape[0]
+    else:
+        raise Exception('dataname %s not supported' % paramdict['name'])
+    return X, labels, k
+
+
+def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
+    synthetic_data = np.array_equal(X, np.transpose(X))
+    k = np.unique(labels).shape[0]
+    n = X.shape[0]
+    print('n = %d k = %d sample_ratio = %.3f' % (n, k, sample_ratio))
+    km, idx = subsampled_kmeans(X, k, sample_ratio, synthetic_data)
     kmeans_clusters_alg, conf_mat = correct_label_assignment(km.labels_, labels[idx])
     acc_alg = metrics.classification.accuracy_score(labels[idx], kmeans_clusters_alg)
-    total_mse = 0.5 * np.sqrt((p-p_hat)**2 + (q-q_hat)**2)
-    print('subsampled Kmeans accuracy = %.3f p_hat = %.3f q_hat=%.3f totalMSE=%.3f' % (acc_alg, p_hat, q_hat, total_mse))
+    print('Subsampled k-means accuracy = %.3f' % acc_alg)
 
-### SBM
-kmeans_subsample_density_estimator()
-#condition_on_T(600)
-#wrapper(600)
+    clustidx = [np.where(km.labels_ == i)[0] for i in range(k)]  # indices per cluster
+    sub_X = X[np.ix_(idx, idx)] if synthetic_data else X[idx, :]
+    sub_n = len(idx)
+
+    # Estimate alpha, beta, p, q parameters
+    if synthetic_data:
+        intra_clust_sums = [np.sum(sub_X[np.ix_(tidx, tidx)]) for tidx in clustidx] if synthetic_data else [np.sum(sub_X[tidx, :]) for tidx in clustidx]
+        p_hat = np.mean([intra_clust_sums[i] / (len(tidx) ** 2) for i, tidx in enumerate(clustidx)])
+        q_hat = np.mean([(np.sum(sub_X[tidx, :]) - intra_clust_sums[i]) / (len(tidx) * (sub_n - len(tidx))) for i, tidx in enumerate(clustidx)])
+        #total_mse = 0.5 * np.sqrt((p - p_hat) ** 2 + (q - q_hat) ** 2)
+        #print('p_hat = %.3f q_hat = %.3f mse = %.3f' % (p_hat, q_hat, total_mse))
+        alpha, beta = compute_alpha_beta(p_hat, q_hat)
+    else:
+        alpha = np.mean([np.mean(1.0 - distance.pdist(sub_X[tidx, :], 'Hamming')) for tidx in clustidx])
+        beta = np.mean(
+            [np.mean(1.0 - distance.cdist(sub_X[tidx, :], sub_X[np.setdiff1d(range(1, sub_n), tidx), :], 'Hamming')) for
+             tidx in clustidx])
+    print('alpha = %.3f beta = %.3f' % (alpha, beta))
+    t, D = compute_t_D(n, alpha, beta)
+    print('t = %.3f D = %.3f' % (t, D))
+    return t, D
+
+
+def evaluate_dataset_plot(X, labels, k, t, D):
+    res = list()
+    timeres = list()
+    for T in D:
+        iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels, False)
+        res.append(iterout[:4])
+        timeres.append(iterout[4:])
+    res = np.asarray(res)
+    timeres = np.asarray(timeres)
+    res = np.asarray(res)
+    plt.imshow(res)
+    plt.yticks(range(len(D)), D)
+    plt.xticks(range(4), ['ALG', 'PCA', 'ECC-PCA', 'VANILLA'])
+    cbar = plt.colorbar()
+    cbar.set_label('Accuracy')
+    plt.xlabel('Algorithm')
+    plt.ylabel('Added parity coordinates')
+    plt.show()
+
+
+### Dataset parameter dictionaries
+sbm_params = {'name': 'SBM', 'n': 1000, 'k': 4, 'p': 0.5, 'q': 0.003}
+mushroom_params = {'name': 'Mushrooms'}
+
+#Selected a dataset loading dictionary
+data_params = mushroom_params
+print(data_params)
+X, labels, k = get_dataset(data_params)
+#t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
+t = 4
+D = [10, 100, 200, 1000]
+evaluate_dataset_plot(X, labels, k, t, D)
+
+# condition_on_T(600)
+# wrapper(600)
 
 ### Digits
 # digits()
+
+
+print('done.')
