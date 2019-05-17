@@ -81,6 +81,7 @@ def ecc_kmeans(X, T, k, s, labels, verbose=True):
     n = X.shape[0]
     tic = time.time()
     np.random.seed(int(time.time()))
+    print(s,n,T)
     random_subsets = np.random.binomial(1, s, (n, T))
     parity_bits = np.mod(np.matmul(X, random_subsets), 2)
     reduced_data = np.hstack([X, parity_bits])
@@ -93,6 +94,23 @@ def ecc_kmeans(X, T, k, s, labels, verbose=True):
         print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
         print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
     return reduced_data, acc_alg, time_alg, subtime
+
+# def ecc_kmeans_reals(X, T, k, s, labels, verbose=True):
+#     ### Error Correcting Code approach
+#     n = X.shape[0]
+#     tic = time.time()
+#     np.random.seed(int(time.time()))
+#     random_subsets = np.random.binomial(1, s, (n, T))
+#     reduced_data = np.hstack([X, parity_bits])
+#     subtime = time.time() - tic
+#     kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
+#     acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
+#     time_alg = time.time() - tic
+#     print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
+#     if verbose:
+#         print(metrics.classification.classification_report(labels, kmeans_clusters_alg))
+#         print(metrics.confusion_matrix(labels, kmeans_clusters_alg))
+#     return reduced_data, acc_alg, time_alg, subtime
 
 
 def sample_row(row, s, T):
@@ -117,6 +135,40 @@ def ecc_kmeans_v2(X, s, T):
     print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
     return reduced_data, acc_alg, time_alg, subtime
 
+def ecc_kmeans_v2_reals(X, s, T):
+    ### Error Correcting Code approach
+    tic = time.time()
+    np.random.seed(int(time.time()))
+    d = X.shape[1]
+    # print(X.shape[1], X.shape[0], T)
+    # T=2
+    X_reduced = np.zeros((X.shape[0], X.shape[1]+T))
+    X_reduced[:, :X.shape[1]] = X
+    for i in range(T):
+        vect = np.random.binomial(1, s, d)
+        sizevect = sum(vect)
+        r = np.random.rand(sizevect)
+        for l in range(X.shape[0]):
+            dp = 0
+            count = 0
+            for j in range(d):
+                if vect[j] == 1:
+                    # print(r[count], l,j)
+                    # print(X[l,j])
+                    dp += vect[j]*((r[count]-X[l,j])**2)
+                    count+=1
+            X_reduced[l,d+i] = dp
+    print(X_reduced)
+                
+#    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
+    reduced_data = X_reduced #np.hstack([X, parity_bits])
+    subtime = time.time() - tic
+    kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
+    acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
+    time_alg = time.time() - tic
+    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
+    return reduced_data, acc_alg, time_alg, subtime
+
 
 def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     """
@@ -131,7 +183,7 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     # BCHCode.decode()
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2(X, s, T)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, s, T)
 
     ### Classic PCA approach
     tic = time.time()
@@ -481,6 +533,27 @@ def get_dataset(paramdict=None):
     return X, labels, k
 
 
+def get_digits():
+    from sklearn.datasets import load_digits
+    from sklearn.preprocessing import scale
+
+    digits = load_digits()
+    data = scale(digits.data)
+    n_samples, n_features = data.shape
+    n_digits = len(np.unique(digits.target))
+
+    labels = digits.target
+    
+    return data, n_digits, labels
+
+
+def get_cancer():
+    from sklearn.datasets import load_breast_cancer
+    data = load_breast_cancer()
+    labels = data.target
+
+
+    
 def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
     synthetic_data = np.array_equal(X, np.transpose(X))
     k = np.unique(labels).shape[0]
