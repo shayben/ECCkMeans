@@ -169,7 +169,7 @@ def ecc_kmeans_v2_reals(X, s, T):
                     dp += vect[j]*((r[count]-X[l,j])**2)
                     count+=1
             X_reduced[l,d+i] = dp
-    print(X_reduced)
+    # print(X_reduced)
                 
 #    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
     reduced_data = X_reduced #np.hstack([X, parity_bits])
