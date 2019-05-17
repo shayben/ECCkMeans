@@ -113,13 +113,24 @@ def ecc_kmeans(X, T, k, s, labels, verbose=True):
 #     return reduced_data, acc_alg, time_alg, subtime
 
 
+def as_polynom(entries):
+    t = entries.shape[1]
+    s = np.random.rand()
+    res = entries.tolist()[0]
+    for p in range(t):
+        res[p] = res[p] * s**p
+    return np.expand_dims(np.asarray(res),0)
+
+
 def sample_row(row, s, T):
     """
     sample_mat = sp.sparse.csr_matrix(np.random.binomial(1, s, (T, row.shape[1])))
     np.mod(np.sum(np.asarray([row[0, i] for i in np.random.randint(0, row.shape[1], (T, 2))]).squeeze(), axis=1), 2)
     return np.mod(np.sum(sample_mat.multiply(row), axis=1), 2).swapaxes(0, 1)
     """
-    return np.mod(np.sum(np.asarray([row[0, i] for i in np.random.randint(0, row.shape[1], (T, int(s * row.shape[1])))]).squeeze(), axis=1), 2)
+    #return np.mod(np.sum(np.asarray([row[0, i] for i in np.random.randint(0, row.shape[1], (T, int(s * row.shape[1])))]).squeeze(), axis=1), 2)
+    return np.sum(np.asarray([as_polynom(row[0, i]) for i in np.random.randint(0, row.shape[1], (T, int(s * row.shape[1])))]).squeeze(), axis=1)
+
 
 
 def ecc_kmeans_v2(X, s, T):
@@ -616,8 +627,8 @@ data_params = mushroom_params
 print(data_params)
 X, labels, k = get_dataset(data_params)
 #t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
-t = 4
-D = [10, 100, 200, 1000]
+t = 6
+D = [5, 10, 20, 100]
 evaluate_dataset_plot(X, labels, k, t, D)
 
 # condition_on_T(600)
