@@ -662,10 +662,14 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 # D = [5, 10, 20, 100]
 # evaluate_dataset_plot(X, labels, k, t, D)
 
-get_dataset("KDD")
-exit()
+# "iris"
+# "digits"
+# "boston"
+# "cancer"
+# "KDD"
+name = "digits"
 
-X, n, labels = get_digits()
+X, n, labels = get_dataset(name)
 k = 10
 t = 30.0
 D = [1, 10, 20, 40, 60, 120]
