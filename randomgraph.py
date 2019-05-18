@@ -166,9 +166,9 @@ def ecc_kmeans_v2_reals(X, s, T):
                 if vect[j] == 1:
                     # print(r[count], l,j)
                     # print(X[l,j])
-                    dp += vect[j]*((r[count]-X[l,j])**2)
+                    dp += (1/float(sizevect))*((r[count]-X[l,j])**2)
                     count+=1
-            X_reduced[l,d+i] = dp
+            X_reduced[l,d+i] = math.sqrt(dp)
     # print(X_reduced)
                 
 #    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
@@ -194,7 +194,8 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
     # BCHCode.decode()
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, s, T)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X,
+                                                                   s, T)
 
     ### Classic PCA approach
     tic = time.time()
@@ -260,7 +261,7 @@ def subsampled_kmeans(X, k, fraction, is_adj=True):
 
 
 def kmeans(X, k):
-    alg = KMeans(init='k-means++', n_clusters=k, n_init=10)
+    alg = KMeans(init='random', n_clusters=k, n_init=30)
     alg.fit(X)
     # kmeans_clusters = {c: [] for c in range(k)}
     # for i in range(len(X)):
@@ -619,17 +620,25 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 
 
 ### Dataset parameter dictionaries
-sbm_params = {'name': 'SBM', 'n': 1000, 'k': 4, 'p': 0.5, 'q': 0.003}
-mushroom_params = {'name': 'Mushrooms'}
+# sbm_params = {'name': 'SBM', 'n': 1000, 'k': 4, 'p': 0.5, 'q': 0.003}
+# mushroom_params = {'name': 'Mushrooms'}
 
 #Selected a dataset loading dictionary
-data_params = mushroom_params
-print(data_params)
-X, labels, k = get_dataset(data_params)
-#t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
-t = 6
-D = [5, 10, 20, 100]
+# data_params = mushroom_params
+# print(data_params)
+# X, labels, k = get_dataset(data_params)
+# t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
+# t = 6
+# D = [5, 10, 20, 100]
+# evaluate_dataset_plot(X, labels, k, t, D)
+
+X, n, labels = get_digits()
+k = 10
+t = 30.0
+D = [0]
 evaluate_dataset_plot(X, labels, k, t, D)
+
+
 
 # condition_on_T(600)
 # wrapper(600)
