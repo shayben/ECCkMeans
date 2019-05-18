@@ -559,12 +559,41 @@ def get_digits():
     
     return data, n_digits, labels
 
+def get_dataset(name):
+    from sklearn.preprocessing import scale
+    data = []
+    
+    if name == "cancer":
+        from sklearn.datasets import load_breast_cancer
+        dataset = load_breast_cancer()
 
-def get_cancer():
-    from sklearn.datasets import load_breast_cancer
-    data = load_breast_cancer()
-    labels = data.target
+    elif name == "digits":
+        from sklearn.datasets import load_digits
+        dataset = load_digits()
 
+    elif name == "iris":
+        from sklearn.datasets import load_iris
+        dataset = load_iris()
+
+    elif name == "boston":
+        from sklearn.datasets import load_boston
+        dataset = load_boston()
+    elif name == "KDD":
+        from sklearn.datasets import fetch_kddcup99
+        dataset = fetch_kddcup99(subset='SF')
+        data = dataset.data[:2000, [0,2,3]]
+    else:
+        print("Unknown name of dataset")
+        exit(-1)
+
+        
+    labels = dataset.target
+    if data == []:
+        data = scale(dataset.data)
+    n_samples, n_features = data.shape
+    n_elements = len(np.unique(labels))
+    
+    return data, n_elements, labels
 
     
 def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
@@ -632,6 +661,9 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 # t = 6
 # D = [5, 10, 20, 100]
 # evaluate_dataset_plot(X, labels, k, t, D)
+
+get_dataset("KDD")
+exit()
 
 X, n, labels = get_digits()
 k = 10
