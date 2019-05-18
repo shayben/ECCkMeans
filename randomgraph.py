@@ -1,5 +1,6 @@
 import networkx as nx
 import itertools
+import math
 import numpy as np
 from sklearn import metrics, manifold
 from sklearn.cluster import KMeans
@@ -261,7 +262,7 @@ def subsampled_kmeans(X, k, fraction, is_adj=True):
 
 
 def kmeans(X, k):
-    alg = KMeans(init='random', n_clusters=k, n_init=30)
+    alg = KMeans(init='random', n_clusters=k, n_init=10)
     alg.fit(X)
     # kmeans_clusters = {c: [] for c in range(k)}
     # for i in range(len(X)):
@@ -635,7 +636,7 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 X, n, labels = get_digits()
 k = 10
 t = 30.0
-D = [0]
+D = [1, 10, 20, 40, 60, 120]
 evaluate_dataset_plot(X, labels, k, t, D)
 
 
