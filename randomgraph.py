@@ -593,7 +593,7 @@ def get_dataset(name):
     n_samples, n_features = data.shape
     n_elements = len(np.unique(labels))
     
-    return data, n_elements, labels
+    return data, n_elements, labels, len(set(labels))
 
     
 def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
@@ -669,8 +669,9 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 # "KDD"
 name = "digits"
 
-X, n, labels = get_dataset(name)
-k = 10
+X, n, labels, k = get_dataset(name)
+print(k)
+# k = 10
 t = 30.0
 D = [1, 10, 20, 40, 60, 120]
 evaluate_dataset_plot(X, labels, k, t, D)
