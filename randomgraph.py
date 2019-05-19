@@ -586,6 +586,7 @@ def get_dataset(name):
     elif name == "boston":
         from sklearn.datasets import load_boston
         dataset = load_boston()
+        data = dataset.data
     elif name == "KDD":
         from sklearn.datasets import fetch_kddcup99
         dataset = fetch_kddcup99(subset='None')
@@ -699,7 +700,7 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
 # "boston"
 # "cancer"
 # "KDD"
-name = "KDD"
+name = "boston"
 
 X, n, labels, k = get_dataset(name)
 print('n=%d k=%d' % (n, k))
