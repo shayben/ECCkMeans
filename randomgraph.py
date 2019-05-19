@@ -42,9 +42,11 @@ def get_dataset(name, **kwargs):
     if name == "SBM":
         X, labels = generate_block_stochastic_data(kwargs['n'], kwargs['k'], kwargs['p'], kwargs['q'])
         return X, X.shape[0], labels, len(set(labels))
+
     elif name == "mushrooms":
         X, labels = mush.ReadMushrooms()
         return X, X.shape[0], labels, len(set(labels))
+
     elif name == "cancer":
         from sklearn.datasets import load_breast_cancer
         dataset = load_breast_cancer()
@@ -61,10 +63,15 @@ def get_dataset(name, **kwargs):
         from sklearn.datasets import load_boston
         dataset = load_boston()
         data = dataset.data
+
     elif name == "KDD":
         from sklearn.datasets import fetch_kddcup99
         dataset = fetch_kddcup99(subset='None')
-        data = dataset.data[:, 4:]
+        data = dataset.data[:, 4:].astype(float)
+        labmap = dict([(v, id) for id, v in enumerate(set(dataset.target))])
+        print(labmap)
+        dataset.target = [labmap[v] for v in dataset.target]
+
     else:
         print("Unknown name of dataset")
         exit(-1)
@@ -435,7 +442,7 @@ def compute_all_kmeans(X, T, k, s, labels):
 
 
 def kmeans(X, k):
-    alg = KMeans(init='random', n_clusters=k, n_init=10)
+    alg = KMeans(init='random', n_clusters=k, n_init=10, n_jobs=5)
     alg.fit(X)
     # kmeans_clusters = {c: [] for c in range(k)}
     # for i in range(len(X)):
@@ -584,7 +591,7 @@ if __name__ == '__main__':
     # "KDD"
     # "mushrooms"
     # "SBM" with explicit parameters n,k,p,q
-    name = "digits"
+    name = "KDD"
 
     X, n, labels, k = get_dataset(name)
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
