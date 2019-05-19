@@ -588,20 +588,24 @@ def get_dataset(name):
         dataset = load_boston()
     elif name == "KDD":
         from sklearn.datasets import fetch_kddcup99
-        dataset = fetch_kddcup99(subset='SF')
-        data = dataset.data[:2000, [0,2,3]]
+        dataset = fetch_kddcup99(subset='None')
+        data = dataset.data[:, 4:]        
+        # data = dataset.data[:2000]
     else:
         print("Unknown name of dataset")
         exit(-1)
 
-        
+
+    print("Info dataset", data.shape)
     labels = dataset.target
     if data == []:
         data = scale(dataset.data)
     n_samples, n_features = data.shape
-    n_elements = len(np.unique(labels))
+    # n_elements = len(np.unique(labels))
+    # print(dataset.DESCR)
+    # print(data[1])
     
-    return data, n_elements, labels, len(set(labels))
+    return data, n_samples, labels, len(set(labels))
 
     
 def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
@@ -695,7 +699,7 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
 # "boston"
 # "cancer"
 # "KDD"
-name = "digits"
+name = "KDD"
 
 X, n, labels, k = get_dataset(name)
 print('n=%d k=%d' % (n, k))
