@@ -147,7 +147,11 @@ def ecc_kmeans_v2(X, s, T):
     print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
     return reduced_data, acc_alg, time_alg, subtime
 
-def ecc_kmeans_v2_reals(X, s, T):
+
+def ecc_kmeans_v2_reals(X, s, T, p):
+    ## p==-1, the inf norm, p==0 is not supported
+    if p == 0:
+        raise Exception("0 norm not supported.")
     ### Error Correcting Code approach
     tic = time.time()
     np.random.seed(int(time.time()))
@@ -167,9 +171,13 @@ def ecc_kmeans_v2_reals(X, s, T):
                 if vect[j] == 1:
                     # print(r[count], l,j)
                     # print(X[l,j])
-                    dp += (1/float(sizevect))*((r[count]-X[l,j])**2)
-                    count+=1
-            X_reduced[l,d+i] = math.sqrt(dp)
+                    if p == -1 and dp < np.abs((r[count] - X[l, j])/float(sizevect)):
+                        dp = np.abs((r[count] - X[l, j]) / float(sizevect))
+                    else:
+                        dp += (1/float(sizevect)) * ((r[count] - X[l, j])**p)
+                    count += 1
+            if p >= 1:
+                X_reduced[l, d+i] = math.pow(dp, 1/p)
     # print(X_reduced)
                 
 #    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
@@ -182,7 +190,7 @@ def ecc_kmeans_v2_reals(X, s, T):
     return reduced_data, acc_alg, time_alg, subtime
 
 
-def compute_all_kmeans(X, T, k, s, labels, verbose=True):
+def compute_all_kmeans(X, T, k, s, labels, p = 2, verbose=True):
     """
     :param X: array shape=(n_samples, n_features)
     :param T: ECC code length
@@ -196,7 +204,7 @@ def compute_all_kmeans(X, T, k, s, labels, verbose=True):
 
     ### Error Correcting Code approach
     reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X,
-                                                                   s, T)
+                                                                   s, T, p)
 
     ### Classic PCA approach
     tic = time.time()
@@ -629,13 +637,28 @@ def kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2):
     return t, D
 
 
-def evaluate_dataset_plot(X, labels, k, t, D):
+def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
+    """
+    :param X: dataset
+    :param labels: ground truth labels
+    :param k: k clusters
+    :param t: subset size
+    :param D: #added dimensions
+    :param p: evaluated norm
+    :param iter: #iterations to run per param set
+    :return:
+    """
+
     res = list()
     timeres = list()
     for T in D:
-        iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels, False)
-        res.append(iterout[:4])
-        timeres.append(iterout[4:])
+        iter_vals, iter_times=[], []
+        for itr in range(iter):
+            iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels, p, False)
+            iter_vals.append(iterout[:4])
+            iter_times.append(iterout[4:])
+        res.append(np.mean(iter_vals, axis=0))
+        timeres.append(np.mean(iter_times, axis=0))
     res = np.asarray(res)
     timeres = np.asarray(timeres)
     res = np.asarray(res)
@@ -646,6 +669,11 @@ def evaluate_dataset_plot(X, labels, k, t, D):
     cbar.set_label('Accuracy')
     plt.xlabel('Algorithm')
     plt.ylabel('Added parity coordinates')
+
+    for i in range(len(D)):
+        for j in range(4):
+            text = plt.text(j, i, '{:.4f}'.format(res[i, j]).replace('0.', '.'), ha="center", va="center", color="w")
+
     plt.show()
 
 
@@ -670,11 +698,12 @@ def evaluate_dataset_plot(X, labels, k, t, D):
 name = "digits"
 
 X, n, labels, k = get_dataset(name)
-print(k)
+print('n=%d k=%d' % (n, k))
 # k = 10
 t = 30.0
 D = [1, 10, 20, 40, 60, 120]
-evaluate_dataset_plot(X, labels, k, t, D)
+p, iters = 2, 10
+evaluate_dataset_plot(X, labels, k, t, D, p, iters)
 
 
 
