@@ -597,7 +597,7 @@ def get_dataset(name):
         exit(-1)
 
 
-    print("Info dataset", data.shape)
+    # print("Info dataset", data.shape)
     labels = dataset.target
     if data == []:
         data = scale(dataset.data)
@@ -700,7 +700,7 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
 # "boston"
 # "cancer"
 # "KDD"
-name = "boston"
+name = "digits"
 
 X, n, labels, k = get_dataset(name)
 print('n=%d k=%d' % (n, k))
