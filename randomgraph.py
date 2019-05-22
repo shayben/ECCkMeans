@@ -363,7 +363,7 @@ def ecc_kmeans_v2(X, s, T):
     return reduced_data, acc_alg, time_alg, subtime
 
 
-def ecc_kmeans_v2_reals(X, s, T):
+def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     Computes euclidean distance to T random points
     :param X:
@@ -373,21 +373,19 @@ def ecc_kmeans_v2_reals(X, s, T):
     """
     ### Error Correcting Code approach
     tic = time.time()
-    np.random.seed(int(time.time()))
-    d = X.shape[1]
+    #np.random.seed(int(time.time()))
+    n, d = X.shape
     # print(X.shape[1], X.shape[0], T)
     # T=2
 
-    dps = []
-    for i in range(T):
-        vect = np.random.binomial(1, s, d)
-        sizevect = sum(vect)
-        r = np.random.rand(sizevect)
-        dp = np.sqrt(np.sum(1 / sizevect * np.power(X[:, vect == 1] - r, 2), axis=1))
-        dps.append(dp)
+    A = np.square(np.linalg.norm(X, axis=1))
+    Z = np.random.rand(T, d)
+    B = np.square(np.linalg.norm(Z, axis=1))
+    C = np.matmul(X, Z)
+    A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1),(T, n)).transpose()
+    D = A_B - 2*C
 
-    hashed_data = np.atleast_2d(np.vstack(dps))
-    reduced_data = np.hstack([X, np.transpose(hashed_data)])
+    reduced_data = np.hstack([X, D])
     # print(X_reduced)
 
     #    parity_bits = np.apply_along_axis(sample_row, 1, X, s, T)
@@ -397,6 +395,26 @@ def ecc_kmeans_v2_reals(X, s, T):
     time_alg = time.time() - tic
     print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
     return reduced_data, acc_alg, time_alg, subtime
+
+
+def ecc_kmeans_iterations(X, s, T, labels, iter=1):
+    """
+    Runs the algorithm several iterations to mitigate any randomness related issues.
+    :param X: 
+    :param s: 
+    :param T: 
+    :param labels: 
+    :param iter: 
+    :return: 
+    """
+    reduced_data_lst, acc_alg_lst, time_alg_lst, subtime_lst = [], [], [], []
+    for i in range(iter):
+        reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, T, labels, s)
+        reduced_data_lst.append(reduced_data)
+        acc_alg_lst.append(acc_alg)
+        time_alg_lst.append(time_alg)
+        subtime_lst.append(subtime)
+    return np.asarray(reduced_data_lst), np.asarray(acc_alg_lst), np.asarray(time_alg_lst), np.asarray(subtime_lst)
 
 
 def compute_all_kmeans(X, T, k, s, labels):
@@ -412,7 +430,7 @@ def compute_all_kmeans(X, T, k, s, labels):
     n = X.shape[0]
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, s, T)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, s, T, labels)
 
     ### Classic PCA approach
     tic = time.time()
@@ -558,6 +576,7 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
     res = list()
     timeres = list()
     for T in D:
+
         iter_vals, iter_times = [], []
         for itr in range(iter):
             iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels)
@@ -598,8 +617,8 @@ if __name__ == '__main__':
 
     print('n=%d k=%d' % (n, k))
 
-    t = 30.0
-    D = [1, 10, 20, 40, 60, 120]
+    t = X.shape[1]
+    D = list(range(40, 62, 2)) #[25, 50, 75, 100]
     p, iters = 2, 10
     evaluate_dataset_plot(X, labels, k, t, D, p, iters)
 
