@@ -375,13 +375,14 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     tic = time.time()
     #np.random.seed(int(time.time()))
     n, d = X.shape
+    T = int(T)
     # print(X.shape[1], X.shape[0], T)
     # T=2
 
     A = np.square(np.linalg.norm(X, axis=1))
     Z = np.random.rand(T, d)
     B = np.square(np.linalg.norm(Z, axis=1))
-    C = np.matmul(X, Z)
+    C = np.matmul(X, Z.transpose())
     A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1),(T, n)).transpose()
     D = A_B - 2*C
 
@@ -430,7 +431,7 @@ def compute_all_kmeans(X, T, k, s, labels):
     n = X.shape[0]
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, s, T, labels)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, T, labels, s)
 
     ### Classic PCA approach
     tic = time.time()
@@ -602,6 +603,22 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
     plt.show()
 
 
+def plot_norm_density(X, name):
+    n, d = X.shape
+    norms = np.linalg.norm(X, axis=1)
+    density = stats.gaussian_kde(norms)
+    xs = np.linspace(np.min(norms), np.max(norms), 200)
+    plt.plot(xs, density(xs), label=name)
+    plt.xlabel('l2 norm')
+
+
+def debug_plot_densities(X, name):
+    plot_norm_density(X, name)
+    plot_norm_density(np.random.rand(n, X.shape[1]), 'random vector')
+    plt.legend()
+    plt.show()
+
+
 if __name__ == '__main__':
     # "iris"
     # "digits"
@@ -612,7 +629,9 @@ if __name__ == '__main__':
     # "SBM" with explicit parameters n,k,p,q
     name = "KDD"
 
-    X, n, labels, k = get_dataset(name)
+    X, n, labels, k = get_dataset(name, n=600, k=4, p=0.6, q=0.2)
+    #debug_plot_densities(X, name)
+
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
 
     print('n=%d k=%d' % (n, k))
