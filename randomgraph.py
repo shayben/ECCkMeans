@@ -384,7 +384,7 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     B = np.square(np.linalg.norm(Z, axis=1))
     C = np.matmul(X, Z.transpose())
     A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1),(T, n)).transpose()
-    D = A_B - 2*C
+    D = np.sqrt(A_B - 2*C)
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
