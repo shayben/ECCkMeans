@@ -378,12 +378,14 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     T = int(T)
     # print(X.shape[1], X.shape[0], T)
     # T=2
-
+    Xmean = np.mean(X, axis=0)
+    centeredX = X - Xmean
+    Xnorm = np.linalg.norm(centeredX)
     A = np.square(np.linalg.norm(X, axis=1))
-    Z = np.random.rand(T, d)
+    Z = np.random.rand(T, d) * Xnorm + Xmean
     B = np.square(np.linalg.norm(Z, axis=1))
     C = np.matmul(X, Z.transpose())
-    A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1),(T, n)).transpose()
+    A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1), (T, n)).transpose()
     D = np.sqrt(A_B - 2*C)
 
     reduced_data = np.hstack([X, D])
