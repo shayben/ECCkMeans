@@ -327,6 +327,12 @@ if False:
 
 # endregion
 
+# def print_data(X):
+#     for i in range(len(X)):
+#         for j in range(len(X[i])):
+#             print(X[i][j]+" ", end='')
+#         print("\n")
+
 
 def ecc_kmeans_v2(X, s, T):
     def sample_row(row, s, T):
