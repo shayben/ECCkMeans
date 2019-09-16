@@ -17,7 +17,7 @@ then our new approach performs better than the approaches known in literature.
 We complement our results with an empirical analysis on both synthetic and real-world datasets.
 
 """
-import time
+import time, datetime
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
@@ -363,16 +363,7 @@ def ecc_kmeans_v2(X, s, T):
     return reduced_data, acc_alg, time_alg, subtime
 
 
-def ecc_kmeans_v2_reals(X, T, labels, s=1):
-    """
-    Computes euclidean distance to T random points
-    :param X:
-    :param s:
-    :param T:
-    :return:
-    """
-    ### Error Correcting Code approach
-    tic = time.time()
+def matrix_form_ecc_sampling(X, T):
     #np.random.seed(int(time.time()))
     n, d = X.shape
     T = int(T)
@@ -387,6 +378,41 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     C = np.matmul(X, Z.transpose())
     A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1), (T, n)).transpose()
     D = np.sqrt(A_B - 2*C)
+    return D
+
+
+def loop_form_ecc_sampling(X, T):
+    n, d = X.shape
+    # print(X.shape[1], X.shape[0], T)
+    # T=2
+    D = np.zeros((n, T))
+    for i in range(T):
+        vect = np.random.binomial(1, 1, d)
+        sizevect = sum(vect)
+        r = np.random.rand(sizevect)
+        for l in range(n):
+            dp = 0
+            count = 0
+            for j in range(d):
+                if vect[j] == 1:
+                    dp += (1 / float(sizevect)) * ((r[count] - X[l, j]) ** 2)
+                    count += 1
+            D[l, i] = np.sqrt(dp)
+    return D
+
+
+def ecc_kmeans_v2_reals(X, T, labels, s=1):
+    """
+    Computes euclidean distance to T random points
+    :param X:
+    :param s:
+    :param T:
+    :return:
+    """
+    ### Error Correcting Code approach
+    tic = time.time()
+    #D = matrix_form_ecc_sampling(X, T)
+    D = loop_form_ecc_sampling(X, T)
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
@@ -579,9 +605,9 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
     res = list()
     timeres = list()
     for T in D:
-
         iter_vals, iter_times = [], []
         for itr in range(iter):
+            print('Iteration #%d' % (itr))
             iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels)
             iter_vals.append(iterout[:4])
             iter_times.append(iterout[4:])
@@ -602,7 +628,10 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
         for j in range(4):
             text = plt.text(j, i, '{:.4f}'.format(res[i, j]).replace('0.', '.'), ha="center", va="center", color="w")
 
-    plt.show()
+    plt.savefig('Result_' + datetime.datetime.now().strftime('%Y%m%d%H%M') + '.png')
+    plt.ion()
+    plt.show(block=False)
+    print('Evaluated.')
 
 
 def plot_norm_density(X, name):
@@ -629,7 +658,7 @@ if __name__ == '__main__':
     # "KDD"
     # "mushrooms"
     # "SBM" with explicit parameters n,k,p,q
-    name = "KDD"
+    name = "cancer"
 
     X, n, labels, k = get_dataset(name, n=600, k=4, p=0.6, q=0.2)
     #debug_plot_densities(X, name)
