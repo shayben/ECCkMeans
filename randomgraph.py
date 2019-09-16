@@ -327,6 +327,12 @@ if False:
 
 # endregion
 
+# def print_data(X):
+#     for i in range(len(X)):
+#         for j in range(len(X[i])):
+#             print(X[i][j]+" ", end='')
+#         print("\n")
+
 
 def ecc_kmeans_v2(X, s, T):
     def sample_row(row, s, T):
@@ -369,9 +375,25 @@ def matrix_form_ecc_sampling(X, T):
     T = int(T)
     # print(X.shape[1], X.shape[0], T)
     # T=2
-    Xmean = np.mean(X, axis=0)
-    centeredX = X - Xmean
+    p_i = 20.0/n
+    sample = np.random.random_sample(n)
+#    print(sample)
+    sampled_scaled_ = []
+    for i in range(len(sample)):
+        u = [0]*n
+        if sample[i] < p_i:
+            u[i] = 1
+        sampled_scaled_.append(np.array(u))
+
+    # sample_scaled_ = np.mat([np.array([0]*(i-1)+[1]+[0]*(n-i))
+    #                          for i in range(len(sample))])
+    X_no_outliers_ = np.dot(np.mat(sampled_scaled_), X)
+#    print("Outliers shapes", X_no_outliers_)
+    
+    Xmean = np.mean(X_no_outliers_, axis=0)
+    centeredX = X_no_outliers_ - Xmean
     Xnorm = np.linalg.norm(centeredX)
+    
     A = np.square(np.linalg.norm(X, axis=1))
     Z = np.random.rand(T, d) * Xnorm + Xmean
     B = np.square(np.linalg.norm(Z, axis=1))
@@ -660,7 +682,7 @@ if __name__ == '__main__':
     # "SBM" with explicit parameters n,k,p,q
     name = "cancer"
 
-    X, n, labels, k = get_dataset(name, n=600, k=4, p=0.6, q=0.2)
+    X, n, labels, k = get_dataset(name) #, n=600, k=4, p=0.6, q=0.2)
     #debug_plot_densities(X, name)
 
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
@@ -668,7 +690,7 @@ if __name__ == '__main__':
     print('n=%d k=%d' % (n, k))
 
     t = X.shape[1]
-    D = list(range(40, 62, 2)) #[25, 50, 75, 100]
+    D = list(range(105, 106, 1)) #[25, 50, 75, 100]
     p, iters = 2, 10
     evaluate_dataset_plot(X, labels, k, t, D, p, iters)
 
