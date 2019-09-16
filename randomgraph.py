@@ -371,25 +371,32 @@ def ecc_kmeans_v2(X, s, T):
 
 def matrix_form_ecc_sampling(X, T):
     #np.random.seed(int(time.time()))
+
     n, d = X.shape
     T = int(T)
     # print(X.shape[1], X.shape[0], T)
     # T=2
-    p_i = 20.0/n
-    sample = np.random.random_sample(n)
-#    print(sample)
-    sampled_scaled_ = []
-    for i in range(len(sample)):
-        u = [0]*n
-        if sample[i] < p_i:
-            u[i] = 1
-        sampled_scaled_.append(np.array(u))
+    if False:
+        p_i = 20.0/n
+        sample = np.random.random_sample(n)
+    #    print(sample)
+        sampled_scaled_ = []
+        for i in range(len(sample)):
+            u = [0]*n
+            if sample[i] < p_i:
+                u[i] = 1
+            sampled_scaled_.append(np.array(u))
 
-    # sample_scaled_ = np.mat([np.array([0]*(i-1)+[1]+[0]*(n-i))
-    #                          for i in range(len(sample))])
-    X_no_outliers_ = np.dot(np.mat(sampled_scaled_), X)
-#    print("Outliers shapes", X_no_outliers_)
-    
+        # sample_scaled_ = np.mat([np.array([0]*(i-1)+[1]+[0]*(n-i))
+        #                          for i in range(len(sample))])
+        X_no_outliers_ = np.dot(np.mat(sampled_scaled_), X)
+    #    print("Outliers shapes", X_no_outliers_)
+
+    medX = np.median(X, axis=0)
+    dsts = distance.cdist([medX], X)
+    main_mass = (dsts < np.percentile(dsts, 90)).flatten()
+    X_no_outliers_ = X[main_mass, :]
+
     Xmean = np.mean(X_no_outliers_, axis=0)
     centeredX = X_no_outliers_ - Xmean
     Xnorm = np.linalg.norm(centeredX)
@@ -433,8 +440,9 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     ### Error Correcting Code approach
     tic = time.time()
-    #D = matrix_form_ecc_sampling(X, T)
-    D = loop_form_ecc_sampling(X, T)
+    D1 = matrix_form_ecc_sampling(X, T)
+    D2 = loop_form_ecc_sampling(X, T)
+    D = D1
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
