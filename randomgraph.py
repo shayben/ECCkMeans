@@ -27,6 +27,7 @@ from scipy.spatial import distance
 from sklearn import metrics
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import euclidean_distances
 
 import generate_BX_graph as BX
 import mushrooms as mush
@@ -449,6 +450,14 @@ def loop_form_ecc_sampling(X, T):
     return D
 
 
+def simplified_loop_form_ecc_sampling(X, T):
+    n, d = X.shape
+    r = np.random.rand(T, d)
+    invd = 1.0 / np.sqrt(d)
+    D = invd*euclidean_distances(X, r)
+    return D
+
+
 def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     Computes euclidean distance to T random points
@@ -459,10 +468,11 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     ### Error Correcting Code approach
     tic = time.time()
-    #D1 = matrix_form_ecc_sampling(X, T)
-    #D2 = loop_form_ecc_sampling(X, T)
-    D3 = matrix_form_simhash(X, T)
-    D = D3
+    #D0 = matrix_form_ecc_sampling(X, T)
+    #D1 = loop_form_ecc_sampling(X, T)
+    D2 = simplified_loop_form_ecc_sampling(X, T)
+    #D3 = matrix_form_simhash(X, T)
+    D = D2
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
