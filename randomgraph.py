@@ -369,6 +369,15 @@ def ecc_kmeans_v2(X, s, T):
     return reduced_data, acc_alg, time_alg, subtime
 
 
+def randsphere(n, d):
+    # samples n points uniformly from within a d-dimensional sphere using Muller method (#20):
+    # http://extremelearning.com.au/how-to-generate-uniformly-random-points-on-n-spheres-and-n-balls/
+    u = np.random.normal(0, 1, (d, n))  # an array of d normally distributed random variables
+    norm = sp.linalg.norm(u, axis=0)
+    r = np.power(np.random.rand(n), 1.0 / d)
+    return ((r * u) / norm).transpose()
+
+
 def matrix_form_ecc_sampling(X, T):
     #np.random.seed(int(time.time()))
 
@@ -399,14 +408,26 @@ def matrix_form_ecc_sampling(X, T):
 
     Xmean = np.mean(X_no_outliers_, axis=0)
     centeredX = X_no_outliers_ - Xmean
-    Xnorm = np.linalg.norm(centeredX)
+    Xnorm = np.max(np.linalg.norm(centeredX, axis=1))
     
     A = np.square(np.linalg.norm(X, axis=1))
-    Z = np.random.rand(T, d) * Xnorm + Xmean
+    Z = randsphere(T, d) * Xnorm + Xmean # np.random.rand(T, d) * Xnorm + Xmean
     B = np.square(np.linalg.norm(Z, axis=1))
     C = np.matmul(X, Z.transpose())
     A_B = np.broadcast_to(np.expand_dims(A, axis=1), (n, T)) + np.broadcast_to(np.expand_dims(B, axis=1), (T, n)).transpose()
     D = np.sqrt(A_B - 2*C)
+    return D
+
+
+def matrix_form_simhash(X, T):
+    n, d = X.shape
+    D = np.zeros((n, T))
+    n, d = X.shape
+    T = int(T)
+    Xmean = np.mean(X, axis=0)
+    centeredX = X - Xmean
+    r = np.random.rand(d, T)
+    D = np.sign(np.dot(centeredX, r))
     return D
 
 
@@ -440,9 +461,10 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     ### Error Correcting Code approach
     tic = time.time()
-    D1 = matrix_form_ecc_sampling(X, T)
-    D2 = loop_form_ecc_sampling(X, T)
-    D = D1
+    #D1 = matrix_form_ecc_sampling(X, T)
+    #D2 = loop_form_ecc_sampling(X, T)
+    D3 = matrix_form_simhash(X, T)
+    D = D3
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
