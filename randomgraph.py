@@ -421,8 +421,6 @@ def matrix_form_ecc_sampling(X, T):
 
 def matrix_form_simhash(X, T):
     n, d = X.shape
-    D = np.zeros((n, T))
-    n, d = X.shape
     T = int(T)
     Xmean = np.mean(X, axis=0)
     centeredX = X - Xmean
