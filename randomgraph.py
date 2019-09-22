@@ -420,12 +420,20 @@ def matrix_form_ecc_sampling(X, T):
     return D
 
 
+
 def matrix_form_simhash(X, T):
     n, d = X.shape
     T = int(T)
-    Xmean = np.mean(X, axis=0)
+    medX = np.median(X, axis=0)
+    dsts = distance.cdist([medX], X)
+    main_mass = (dsts < np.percentile(dsts, 90)).flatten()
+    X_no_outliers_ = X[main_mass, :]
+    Xmean = np.mean(X_no_outliers_, axis=0)
+    centeredX = X_no_outliers_ - Xmean
+    Xnorm = np.max(np.linalg.norm(centeredX, axis=1))
     centeredX = X - Xmean
-    r = np.random.rand(d, T)
+    r = randsphere(T, d)
+    r=r.transpose()
     D = np.sign(np.dot(centeredX, r))
     return D
 
@@ -470,9 +478,9 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     tic = time.time()
     #D0 = matrix_form_ecc_sampling(X, T)
     #D1 = loop_form_ecc_sampling(X, T)
-    D2 = simplified_loop_form_ecc_sampling(X, T)
-    #D3 = matrix_form_simhash(X, T)
-    D = D2
+    #D2 = simplified_loop_form_ecc_sampling(X, T)
+    D3 = matrix_form_simhash(X, T)
+    D = D3
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
@@ -718,7 +726,7 @@ if __name__ == '__main__':
     # "KDD"
     # "mushrooms"
     # "SBM" with explicit parameters n,k,p,q
-    name = "cancer"
+    name = "digits"
 
     X, n, labels, k = get_dataset(name) #, n=600, k=4, p=0.6, q=0.2)
     #debug_plot_densities(X, name)
@@ -728,8 +736,8 @@ if __name__ == '__main__':
     print('n=%d k=%d' % (n, k))
 
     t = X.shape[1]
-    D = list(range(105, 106, 1)) #[25, 50, 75, 100]
-    p, iters = 2, 10
+    D = list(range(50,120, 10)) #[25, 50, 75, 100]
+    p, iters = 2, 30
     evaluate_dataset_plot(X, labels, k, t, D, p, iters)
 
     # condition_on_T(600)
