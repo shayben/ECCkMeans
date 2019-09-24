@@ -466,7 +466,7 @@ def simplified_loop_form_ecc_sampling(X, T):
     return D
 
 
-def ecc_kmeans_v2_reals(X, T, labels, s=1):
+def ecc_kmeans_v2_reals(X, T, labels, sampling_approach='simplified_loop'):
     """
     Computes euclidean distance to T random points
     :param X:
@@ -476,11 +476,16 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     """
     ### Error Correcting Code approach
     tic = time.time()
-    #D0 = matrix_form_ecc_sampling(X, T)
-    #D1 = loop_form_ecc_sampling(X, T)
-    #D2 = simplified_loop_form_ecc_sampling(X, T)
-    D3 = matrix_form_simhash(X, T)
-    D = D3
+    if sampling_approach == 'matrix':
+        D = matrix_form_ecc_sampling(X, T)
+    elif sampling_approach == 'loop':
+        D = loop_form_ecc_sampling(X, T)
+    elif sampling_approach == 'simplified_loop':
+        D = simplified_loop_form_ecc_sampling(X, T)
+    elif sampling_approach == 'simhash':
+        D = matrix_form_simhash(X, T)
+    else:
+        raise ValueError('Bad sampling approach string')
 
     reduced_data = np.hstack([X, D])
     # print(X_reduced)
@@ -490,7 +495,7 @@ def ecc_kmeans_v2_reals(X, T, labels, s=1):
     kmeans_clusters_alg, conf_mat = correct_label_assignment(kmeans(reduced_data, k), labels)
     acc_alg = metrics.classification.accuracy_score(labels, kmeans_clusters_alg)
     time_alg = time.time() - tic
-    print("ALG took %.3s seconds. Accuracy=%s" % (time_alg, acc_alg))
+    print("ALG-%s took %.3s seconds. Accuracy=%s" % (sampling_approach, time_alg, acc_alg))
     return reduced_data, acc_alg, time_alg, subtime
 
 
@@ -525,17 +530,33 @@ def compute_all_kmeans(X, T, k, s, labels):
     :return: acc_alg, acc_pca, acc_vanilla
     """
     n = X.shape[0]
+    resdict={}
 
     ### Error Correcting Code approach
-    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, T, labels, s)
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, T, labels, sampling_approach='simhash')
+    resdict['ALG-simhash'] = [acc_alg, time_alg]
+
+    reduced_data, acc_alg, time_alg, subtime = ecc_kmeans_v2_reals(X, T, labels, sampling_approach='simplified_loop')
+    resdict['ALG-simplified_loop'] = [acc_alg, time_alg]
 
     ### Classic PCA approach
     tic = time.time()
     reduced_data2 = PCA().fit_transform(X)
+    pca_toc = time.time() - tic
     kmeans_clusters_standard, conf_mat2 = correct_label_assignment(kmeans(reduced_data2, k), labels)
     acc_pca = metrics.classification.accuracy_score(labels, kmeans_clusters_standard)
     time_pca = time.time() - tic
-    print("PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time_pca, acc_pca))
+    print("PCA (%s components) took %.3s seconds. Accuracy=%s" % (reduced_data2.shape[1], time_pca, acc_pca))
+    resdict['PCA'] = [acc_pca, time_pca]
+
+    ### PCA as ECC approach
+    tic = time.time()
+    reduced_data5 = np.hstack([X, reduced_data2[:, :T]])
+    kmeans_clusters_pcaecc, conf_mat5 = correct_label_assignment(kmeans(reduced_data5, k), labels)
+    acc_pcaecc = metrics.classification.accuracy_score(labels, kmeans_clusters_pcaecc)
+    time_pcaecc = time.time() - tic + pca_toc
+    print("PCAECC (%s components) took %.3s seconds. Accuracy=%s" % (T, time_pcaecc, acc_pcaecc))
+    resdict['PCAECC'] = [acc_pcaecc, time_pcaecc]
 
     ### ECC-PCA approach
     tic = time.time()
@@ -544,6 +565,7 @@ def compute_all_kmeans(X, T, k, s, labels):
     acc_eccpca = metrics.classification.accuracy_score(labels, kmeans_clusters_eccpca)
     time_eccpca = time.time() - tic + subtime
     print("ECC-PCA (%s components) took %.3s seconds. Accuracy=%s" % (n, time_eccpca, acc_eccpca))
+    resdict['ECC-PCA'] = [acc_eccpca, time_eccpca]
 
     ### Vanilla k-means approach
     tic = time.time()
@@ -552,8 +574,8 @@ def compute_all_kmeans(X, T, k, s, labels):
     acc_vanilla = metrics.classification.accuracy_score(labels, kmeans_clusters_vanilla)
     time_vanilla = time.time() - tic
     print("Vanilla k-means took %.3s seconds. Accuracy=%s" % (time_vanilla, acc_vanilla))
-
-    return acc_alg, acc_pca, acc_eccpca, acc_vanilla, time_alg, time_pca, time_eccpca, time_vanilla
+    resdict['Vanilla'] = [acc_vanilla, time_vanilla]
+    return resdict  # acc_alg, acc_pca, acc_eccpca, acc_vanilla, time_alg, time_pca, time_eccpca, time_vanilla
 
 
 def kmeans(X, k):
@@ -669,16 +691,18 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
     :param iter: #iterations to run per param set
     :return:
     """
-
+    methods = set()
     res = list()
     timeres = list()
     for T in D:
         iter_vals, iter_times = [], []
         for itr in range(iter):
-            print('Iteration #%d' % (itr))
+            print('T= %d Iteration #%d' % (T, itr))
             iterout = compute_all_kmeans(X, T, k, t / X.shape[1], labels)
-            iter_vals.append(iterout[:4])
-            iter_times.append(iterout[4:])
+            for key in iterout.keys():
+                methods.add(key)
+            iter_vals.append([iterout[key][0] for key in methods])
+            iter_times.append([iterout[key][1] for key in methods])
         res.append(np.mean(iter_vals, axis=0))
         timeres.append(np.mean(iter_times, axis=0))
     res = np.asarray(res)
@@ -686,14 +710,15 @@ def evaluate_dataset_plot(X, labels, k, t, D, p, iter=1):
     res = np.asarray(res)
     plt.imshow(res)
     plt.yticks(range(len(D)), D)
-    plt.xticks(range(4), ['ALG', 'PCA', 'ECC-PCA', 'VANILLA'])
+    plt.xticks(range(len(methods)), methods)
     cbar = plt.colorbar()
     cbar.set_label('Accuracy')
     plt.xlabel('Algorithm')
     plt.ylabel('Added parity coordinates')
+    plt.title('Dataset = %s. %d iterations. Time=%s' % (name, iter, datetime.datetime.now().strftime('%Y%m%d')))
 
     for i in range(len(D)):
-        for j in range(4):
+        for j in range(len(methods)):
             text = plt.text(j, i, '{:.4f}'.format(res[i, j]).replace('0.', '.'), ha="center", va="center", color="w")
 
     plt.savefig('Result_' + datetime.datetime.now().strftime('%Y%m%d%H%M') + '.png')
@@ -726,17 +751,17 @@ if __name__ == '__main__':
     # "KDD"
     # "mushrooms"
     # "SBM" with explicit parameters n,k,p,q
-    name = "digits"
+    name = "cancer"
 
     X, n, labels, k = get_dataset(name) #, n=600, k=4, p=0.6, q=0.2)
     #debug_plot_densities(X, name)
 
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
 
-    print('n=%d k=%d' % (n, k))
+    print('n=%d k=%d D=%d' % (n, k, X.shape[1]))
 
     t = X.shape[1]
-    D = list(range(50,120, 10)) #[25, 50, 75, 100]
+    D = list(range(50, 126, 25)) #[25, 50, 75, 100]
     p, iters = 2, 30
     evaluate_dataset_plot(X, labels, k, t, D, p, iters)
 
