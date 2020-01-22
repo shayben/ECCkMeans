@@ -28,6 +28,8 @@ from sklearn import metrics
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import euclidean_distances
+import umap
+import seaborn as sns
 
 import generate_BX_graph as BX
 import mushrooms as mush
@@ -443,8 +445,10 @@ def loop_form_ecc_sampling(X, T):
     # print(X.shape[1], X.shape[0], T)
     # T=2
     D = np.zeros((n, T))
+    vecs=[]
     for i in range(T):
         vect = np.random.binomial(1, 1, d)
+        vecs.append(vect)
         sizevect = sum(vect)
         r = np.random.rand(sizevect)
         for l in range(n):
@@ -455,7 +459,7 @@ def loop_form_ecc_sampling(X, T):
                     dp += (1 / float(sizevect)) * ((r[count] - X[l, j]) ** 2)
                     count += 1
             D[l, i] = np.sqrt(dp)
-    return D
+    return D, vecs
 
 
 def simplified_loop_form_ecc_sampling(X, T):
@@ -743,17 +747,89 @@ def debug_plot_densities(X, name):
     plt.show()
 
 
+def plot_line_with_std(xvals, M):
+    plt.plot(xvals, np.mean(M, axis=1))
+    plt.plot(xvals, np.mean(M, axis=1) + np.std(M, axis=1))
+    plt.plot(xvals, np.mean(M, axis=1) - np.std(M, axis=1))
+
+def eval_embedding_samples(X, labels):
+    reducer = umap.UMAP()
+    print('root embedding')
+    embedding_root = reducer.fit_transform(X)
+    plt.scatter(embedding_root[:, 0], embedding_root[:, 1], c=[sns.color_palette()[x] for x in labels])
+    plt.gca().set_aspect('equal', 'datalim')
+    D, pts = loop_form_ecc_sampling(X, 1000)
+    dists = distance.cdist(X, np.asarray(pts))
+
+    new_classid = np.max(labels)+1
+    for pltid, i in enumerate(range(0, 1000, 100)):
+
+        tX = np.vstack([X, np.asarray(pts)[:i, :]])
+        print('embedding T=%s'%i)
+        embedding = reducer.fit_transform(tX)
+        plt.subplot(2, 5, pltid+1)
+        plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in np.concatenate([labels, np.repeat(new_classid, i)])])
+        plt.gca().set_aspect('equal', 'datalim')
+    plt.show()
+
+
+def eval_cluster_flips(X, k, gt_labels, T=140):
+    #reducer = umap.UMAP()
+    #embedding = reducer.fit_transform(X)
+    print('embedding.')
+    xvals = list(range(20, 70, 10))
+    cluster_labels = kmeans(X, k)
+    #plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in cluster_labels])
+    #plt.gca().set_aspect('equal', 'datalim')
+    labels_out, flips_arr, acc_arr = [], [], []
+    for pltid, i in enumerate(xvals):
+        flips_arr.append([])
+        acc_arr.append([])
+        for iter in range(3):
+            #print('clustering T=%s' % i)
+            D = loop_form_ecc_sampling(X, i)
+            tX = np.hstack([X, D])
+            clustids = kmeans(tX, k)
+            lbl, _ = correct_label_assignment(clustids, cluster_labels)
+            labels_out.append(lbl)
+            flips_arr[-1].append(np.sum(lbl != cluster_labels))
+            lbl2, _ = correct_label_assignment(clustids, gt_labels)
+            acc_arr[-1].append(metrics.classification.accuracy_score(lbl2, gt_labels))
+            print('T=%s, iter=%s, %s flipped, acc=%s' % (i, iter, np.sum(lbl != cluster_labels), acc_arr[-1][-1]))
+            #embedding = reducer.fit_transform(tX)
+            #plt.subplot(1, nplots, pltid+2)
+            #plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in lbl])
+            #plt.title('%s' % np.sum(lbl != cluster_labels))
+            #plt.gca().set_aspect('equal', 'datalim')
+    #plt.show()
+    ax = plt.subplot(2, 1, 1)
+    plot_line_with_std(xvals, np.asarray(flips_arr))
+    plt.subplot(2, 1, 2, sharex=ax)
+    plot_line_with_std(xvals, np.asarray(acc_arr))
+    """
+    sns.lineplot(xvals, np.asarray(flips_arr))
+    labels_out = np.asarray(labels_out)
+    labels_out == np.tile(cluster_labels, (14, 1))
+    deltas = np.not_equal(labels_out, np.tile(cluster_labels, (14, 1)))
+    plt.plot(['%s-%s' % (xvals[i-1], xvals[i]) for i in range(1, len(xvals))], np.sum(deltas, axis=1))
+    """
+    plt.show()
+    print('done.')
+
 if __name__ == '__main__':
     # "iris"
     # "digits"
-    # "boston"
     # "cancer"
     # "KDD"
     # "mushrooms"
+    # "wine"
     # "SBM" with explicit parameters n,k,p,q
     name = "cancer"
 
     X, n, labels, k = get_dataset(name) #, n=600, k=4, p=0.6, q=0.2)
+    eval_embedding_samples(X, labels)
+    subids = np.random.choice(range(X.shape[0]), int(X.shape[0]/10), replace=False)
+    eval_cluster_flips(X[subids, :], k, np.asarray(labels)[subids])
     #debug_plot_densities(X, name)
 
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
