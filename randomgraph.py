@@ -445,12 +445,12 @@ def loop_form_ecc_sampling(X, T):
     # print(X.shape[1], X.shape[0], T)
     # T=2
     D = np.zeros((n, T))
-    vecs=[]
+    vecs = []
     for i in range(T):
         vect = np.random.binomial(1, 1, d)
-        vecs.append(vect)
         sizevect = sum(vect)
         r = np.random.rand(sizevect)
+        vecs.append(r)
         for l in range(n):
             dp = 0
             count = 0
@@ -483,7 +483,7 @@ def ecc_kmeans_v2_reals(X, T, labels, sampling_approach='simplified_loop'):
     if sampling_approach == 'matrix':
         D = matrix_form_ecc_sampling(X, T)
     elif sampling_approach == 'loop':
-        D = loop_form_ecc_sampling(X, T)
+        D,pts = loop_form_ecc_sampling(X, T)
     elif sampling_approach == 'simplified_loop':
         D = simplified_loop_form_ecc_sampling(X, T)
     elif sampling_approach == 'simhash':
@@ -749,8 +749,8 @@ def debug_plot_densities(X, name):
 
 def plot_line_with_std(xvals, M):
     plt.plot(xvals, np.mean(M, axis=1))
-    plt.plot(xvals, np.mean(M, axis=1) + np.std(M, axis=1))
-    plt.plot(xvals, np.mean(M, axis=1) - np.std(M, axis=1))
+    plt.fill_between(xvals, np.mean(M, axis=1) + np.std(M, axis=1),
+                     np.mean(M, axis=1) - np.std(M, axis=1), alpha=0.2)
 
 def eval_embedding_samples(X, labels):
     reducer = umap.UMAP()
@@ -776,8 +776,8 @@ def eval_embedding_samples(X, labels):
 def eval_cluster_flips(X, k, gt_labels, T=140):
     #reducer = umap.UMAP()
     #embedding = reducer.fit_transform(X)
-    print('embedding.')
-    xvals = list(range(20, 70, 10))
+    #print('embedding.')
+    xvals = list(range(0, 100, 10))
     cluster_labels = kmeans(X, k)
     #plt.scatter(embedding[:, 0], embedding[:, 1], c=[sns.color_palette()[x] for x in cluster_labels])
     #plt.gca().set_aspect('equal', 'datalim')
@@ -785,9 +785,9 @@ def eval_cluster_flips(X, k, gt_labels, T=140):
     for pltid, i in enumerate(xvals):
         flips_arr.append([])
         acc_arr.append([])
-        for iter in range(3):
+        for iter in range(5):
             #print('clustering T=%s' % i)
-            D = loop_form_ecc_sampling(X, i)
+            D, pts = loop_form_ecc_sampling(X, i)
             tX = np.hstack([X, D])
             clustids = kmeans(tX, k)
             lbl, _ = correct_label_assignment(clustids, cluster_labels)
@@ -816,6 +816,13 @@ def eval_cluster_flips(X, k, gt_labels, T=140):
     plt.show()
     print('done.')
 
+def remap_class_labels_contigously(labels, subids):
+    tlabels = np.asarray(labels)[subids]
+    histout = np.bincount(tlabels)
+    remapper = dict([(v, idx) for idx, v in enumerate([v for k, v in zip(histout, range(np.max(labels)+1)) if k > 0])])
+    tlabels = [remapper[l] for l in tlabels]
+    return tlabels
+
 if __name__ == '__main__':
     # "iris"
     # "digits"
@@ -824,12 +831,14 @@ if __name__ == '__main__':
     # "mushrooms"
     # "wine"
     # "SBM" with explicit parameters n,k,p,q
-    name = "cancer"
+    name = "KDD"
 
     X, n, labels, k = get_dataset(name) #, n=600, k=4, p=0.6, q=0.2)
-    eval_embedding_samples(X, labels)
-    subids = np.random.choice(range(X.shape[0]), int(X.shape[0]/10), replace=False)
-    eval_cluster_flips(X[subids, :], k, np.asarray(labels)[subids])
+    #eval_embedding_samples(X, labels)
+    subids = np.random.choice(range(X.shape[0]), int(X.shape[0]/500), replace=False)
+    labels = remap_class_labels_contigously(labels, subids)
+    k = len(np.bincount(labels))
+    eval_cluster_flips(X[subids, :], k, labels)
     #debug_plot_densities(X, name)
 
     # t, D = kmeans_subsample_density_estimator(X, labels, sample_ratio=0.2)
